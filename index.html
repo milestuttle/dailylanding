@@ -185,8 +185,8 @@
               </button>
               <div class="task-filter-tabs">
                 <button class="tab-btn active" data-filter="all">All</button>
+                <button class="tab-btn" data-filter="priority">Priority</button>
                 <button class="tab-btn" data-filter="work">Work</button>
-                <button class="tab-btn" data-filter="personal">Personal</button>
               </div>
             </div>
           </div>
@@ -195,9 +195,8 @@
           <form class="add-task-form" id="add-task-form">
             <input type="text" id="new-task-title" class="custom-input" placeholder="Add a new task for today..." required>
             <select id="new-task-category" class="custom-select">
-              <option value="priority">🔥 Priority</option>
-              <option value="work">💼 Work</option>
-              <option value="personal">🏠 Personal</option>
+              <option value="work">💼 Work Task</option>
+              <option value="priority">🔥 High Priority</option>
               <option value="quick">⚡ Quick Win</option>
             </select>
             <button type="submit" class="btn btn-primary">Add</button>

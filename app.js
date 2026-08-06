@@ -24,7 +24,7 @@
     tasks: [
       { id: '1', title: 'Morning devotional & prayer', category: 'priority', completed: true },
       { id: '2', title: 'Review today\'s schedule and priorities', category: 'work', completed: false },
-      { id: '3', title: 'Exercise / 30-min walk', category: 'personal', completed: false }
+      { id: '3', title: 'Exercise / 30-min walk', category: 'work', completed: false }
     ],
     habits: [
       { id: 'h1', name: 'Morning Devotional', icon: '📖', streak: 7, completedToday: true },
@@ -661,7 +661,7 @@
                     fetchedTasks.push({
                       id: 'gtask-' + gtask.id,
                       title: gtask.title,
-                      category: isWork ? 'work' : 'personal',
+                      category: 'work',
                       completed: gtask.status === 'completed'
                     });
                   }
