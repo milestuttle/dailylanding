@@ -543,8 +543,13 @@
 
     try {
       const client = google.accounts.oauth2.initTokenClient({
-        client_id: state.googleClientId,
-        scope: 'https://www.googleapis.com/auth/tasks.readonly https://www.googleapis.com/auth/tasks',
+        client_id: (state.googleClientId || '').trim(),
+        scope: 'https://www.googleapis.com/auth/tasks',
+        error_callback: (err) => {
+          console.warn('OAuth Error:', err);
+          alert('Google Auth Error: ' + JSON.stringify(err));
+          if (btn) btn.textContent = 'Sync Google Tasks';
+        },
         callback: async (response) => {
           if (response.error) {
             alert('Google Auth error: ' + response.error);
