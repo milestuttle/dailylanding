@@ -13,7 +13,7 @@
     theme: 'dark',
     weatherCity: 'Canon City, CO',
     icalUrls: [
-      { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/public/basic.ics', category: 'work' },
+      { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/private-498916cece0b466a98842b63b8c7a306/basic.ics', category: 'work' },
       { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/public/basic.ics', category: 'personal' }
     ],
     customRssUrl: '',
@@ -120,9 +120,7 @@
       if (saved) {
         const parsed = JSON.parse(saved);
         const merged = { ...DEFAULT_STATE, ...parsed };
-        if (!merged.icalUrls || merged.icalUrls.length < 2) {
-          merged.icalUrls = DEFAULT_STATE.icalUrls;
-        }
+        merged.icalUrls = DEFAULT_STATE.icalUrls;
         return merged;
       }
     } catch (e) {
