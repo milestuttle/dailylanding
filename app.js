@@ -14,7 +14,7 @@
     weatherCity: 'Canon City, CO',
     icalUrls: [
       { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/private-498916cece0b466a98842b63b8c7a306/basic.ics', category: 'work' },
-      { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/public/basic.ics', category: 'personal' }
+      { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/private-5a8619156108f4e7ca0911a1ae832cbf/basic.ics', category: 'personal' }
     ],
     customRssUrl: '',
     googleClientId: '',
