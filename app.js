@@ -118,7 +118,12 @@
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return { ...DEFAULT_STATE, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        const merged = { ...DEFAULT_STATE, ...parsed };
+        if (!merged.icalUrls || merged.icalUrls.length < 2) {
+          merged.icalUrls = DEFAULT_STATE.icalUrls;
+        }
+        return merged;
       }
     } catch (e) {
       console.warn('LocalStorage error:', e);
@@ -402,19 +407,80 @@
     });
   }
 
+  async function fetchProxyContent(url) {
+    const proxies = [
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+    ];
+    for (const proxyFn of proxies) {
+      try {
+        const res = await fetch(proxyFn(url));
+        if (res.ok) {
+          const text = await res.text();
+          if (text && text.includes('BEGIN:VCALENDAR')) return text;
+        }
+      } catch (e) {
+        console.warn('Proxy attempt failed:', e);
+      }
+    }
+    try {
+      const direct = await fetch(url);
+      return await direct.text();
+    } catch (e) { return null; }
+  }
+
+  function isEventOnDate(block, todayYMD, now) {
+    const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?/);
+    if (!dtstartMatch) return false;
+
+    const startDate = dtstartMatch[1];
+    if (startDate === todayYMD) return true;
+
+    // Check Recurrence Rule (RRULE)
+    if (startDate < todayYMD) {
+      const rruleMatch = block.match(/RRULE:(.*)/);
+      if (!rruleMatch) return false;
+
+      const rrule = rruleMatch[1];
+
+      // Check UNTIL date if present
+      const untilMatch = rrule.match(/UNTIL=(\d{8})/);
+      if (untilMatch && untilMatch[1] < todayYMD) return false;
+
+      if (rrule.includes('FREQ=DAILY')) return true;
+
+      if (rrule.includes('FREQ=WEEKLY')) {
+        const daysMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+        const todayDayCode = daysMap[now.getDay()];
+
+        const bydayMatch = rrule.match(/BYDAY=([^;]+)/);
+        if (bydayMatch) {
+          const days = bydayMatch[1].split(',');
+          if (days.some(d => d.includes(todayDayCode))) return true;
+        } else {
+          const startYear = parseInt(startDate.substring(0, 4), 10);
+          const startMonth = parseInt(startDate.substring(4, 6), 10) - 1;
+          const startDay = parseInt(startDate.substring(6, 8), 10);
+          const startD = new Date(startYear, startMonth, startDay);
+          if (startD.getDay() === now.getDay()) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   async function fetchIcalFeed() {
     const statusEl = document.getElementById('ical-sync-status');
     const feeds = state.icalUrls && state.icalUrls.length > 0
       ? state.icalUrls
-      : (state.icalUrl ? [{ name: 'Calendar', url: state.icalUrl, category: 'work' }] : []);
-
-    if (feeds.length === 0) {
-      if (statusEl) statusEl.textContent = 'ℹ️ Local Calendar (Add iCal feed in settings)';
-      return;
-    }
+      : [
+          { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/public/basic.ics', category: 'work' },
+          { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/public/basic.ics', category: 'personal' }
+        ];
 
     if (statusEl) statusEl.textContent = '🔄 Syncing Work & Personal Calendars...';
-    
+
     const now = new Date();
     const todayYMD = now.getFullYear().toString() + 
                      String(now.getMonth() + 1).padStart(2, '0') + 
@@ -425,21 +491,21 @@
     try {
       await Promise.all(feeds.map(async (feed) => {
         try {
-          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(feed.url)}`);
-          let text = await res.text();
-          text = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
+          let text = await fetchProxyContent(feed.url);
+          if (!text) return;
 
+          text = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
           const blocks = text.split('BEGIN:VEVENT');
+
           blocks.slice(1).forEach(block => {
             const summaryMatch = block.match(/SUMMARY:(.*)/);
             const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?/);
 
             if (summaryMatch && dtstartMatch) {
               const title = summaryMatch[1].trim();
-              const startDate = dtstartMatch[1];
               const startTimeRaw = dtstartMatch[2] || '080000';
 
-              if (startDate === todayYMD) {
+              if (isEventOnDate(block, todayYMD, now)) {
                 const hours = startTimeRaw.substring(0, 2);
                 const mins = startTimeRaw.substring(2, 4);
                 const time = `${hours}:${mins}`;
