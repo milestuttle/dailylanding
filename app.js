@@ -406,21 +406,12 @@
   }
 
   async function fetchProxyContent(url) {
-    // Direct fetch works natively for Google Calendar secret iCal URLs!
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const text = await res.text();
-        if (text && text.includes('BEGIN:VCALENDAR')) return text;
-      }
-    } catch (e) {
-      console.warn('Direct fetch failed, trying proxy fallbacks...', e);
-    }
-
     const proxies = [
+      u => `https://proxy.cors.sh/${u}`,
       u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
       u => `https://corsproxy.io/?${encodeURIComponent(u)}`
     ];
+
     for (const proxyFn of proxies) {
       try {
         const res = await fetch(proxyFn(url));
@@ -432,6 +423,15 @@
         console.warn('Proxy attempt failed:', e);
       }
     }
+
+    try {
+      const direct = await fetch(url);
+      if (direct.ok) {
+        const text = await direct.text();
+        if (text && text.includes('BEGIN:VCALENDAR')) return text;
+      }
+    } catch (e) {}
+
     return null;
   }
 
