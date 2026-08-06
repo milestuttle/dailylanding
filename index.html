@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Daily personal landing page</title>
+  <meta name="description" content="Your daily dashboard for calendar, tasks, devotional, news, weather, and productivity.">
+  
+  <!-- PWA Meta -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DailyDash">
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  
+  <!-- Google Identity Services for Google Tasks OAuth Sync -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- TOP HEADER / HERO BAR -->
+    <header class="hero-header glass-card">
+      <div class="hero-greeting-container">
+        <div class="greeting-text-wrap">
+          <span class="greeting-subtitle" id="current-date-str">Loading date...</span>
+          <h1 class="greeting-title" id="greeting-text">Good morning, <span class="user-name-span" id="display-user-name">Miles</span></h1>
+          <p class="greeting-quote" id="daily-inspiration-quote">"This is the day that the LORD has made; let us rejoice and be glad in it." — Psalm 118:24</p>
+        </div>
+      </div>
+
+      <div class="hero-widgets">
+        <!-- Live Clock -->
+        <div class="clock-card">
+          <div class="clock-time" id="digital-clock">12:00</div>
+          <div class="clock-seconds" id="digital-seconds">:00 AM</div>
+        </div>
+
+        <!-- Weather Widget -->
+        <div class="weather-card" id="weather-card" title="Click to refresh weather">
+          <div class="weather-icon-wrap" id="weather-icon">☀️</div>
+          <div class="weather-details">
+            <div class="weather-temp" id="weather-temp">--°F</div>
+            <div class="weather-desc" id="weather-desc">Fetching weather...</div>
+            <div class="weather-location" id="weather-location">Detecting location</div>
+          </div>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="header-actions">
+          <button class="icon-btn" id="theme-toggle-btn" title="Toggle Theme (Dark / Light / Midnight)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          </button>
+          <button class="icon-btn" id="focus-mode-btn" title="Toggle Fullscreen Focus">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+          </button>
+          <button class="icon-btn" id="settings-open-btn" title="Dashboard Settings & Sync">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN DASHBOARD GRID -->
+    <main class="dashboard-grid">
+      
+      <!-- COLUMN 1: DEVOTIONAL & CALENDAR -->
+      <section class="grid-col col-left">
+        
+        <!-- DEVOTIONAL WIDGET: MY UTMOST FOR HIS HIGHEST -->
+        <article class="widget-card glass-card devotional-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">📖</span>
+              <div>
+                <h2 class="card-title">My Utmost for His Highest</h2>
+                <span class="card-subtitle">Daily Devotional by Oswald Chambers</span>
+              </div>
+            </div>
+            <a href="https://utmost.org" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Open Utmost.org directly">
+              Visit utmost.org ↗
+            </a>
+          </div>
+
+          <div class="devotional-body">
+            <!-- Verse Memory Card -->
+            <div class="verse-memory-box">
+              <div class="verse-header">
+                <span class="tag tag-accent">Today's Scripture</span>
+                <button class="btn-text-sm" id="speak-scripture-btn" title="Read verse aloud">🔊 Listen</button>
+              </div>
+              <p class="verse-text" id="daily-scripture-text">"My eager expectation and hope is that I will not be at all ashamed, but that with all boldness, Christ will even now be exalted in my body, whether by life or by death."</p>
+              <span class="verse-ref" id="daily-scripture-ref">— Philippians 1:20</span>
+            </div>
+
+            <!-- Devotional Highlight / Quick Summary -->
+            <div class="devotional-summary-box">
+              <h3 class="devotional-heading" id="devotional-title">My Eager Expectation</h3>
+              <p class="devotional-excerpt" id="devotional-excerpt">
+                We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, "My eager expectation and hope is that I will not be at all ashamed..." Paul was determined to be completely surrendered to God.
+              </p>
+            </div>
+
+            <div class="devotional-actions">
+              <button class="btn btn-primary btn-block" id="read-full-devotional-btn">
+                📖 Read Full Devotional Entry
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <!-- CALENDAR & AGENDA WIDGET -->
+        <article class="widget-card glass-card agenda-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">📅</span>
+              <div>
+                <h2 class="card-title">Today's Schedule & Events</h2>
+                <span class="card-subtitle" id="agenda-date-subtitle">Loading...</span>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-accent" id="add-event-btn">+ Add Event</button>
+          </div>
+
+          <div class="agenda-body">
+            <div class="agenda-timeline" id="agenda-events-list">
+              <!-- Events dynamically populated by JS -->
+            </div>
+          </div>
+
+          <div class="card-footer agenda-footer">
+            <span class="ical-status" id="ical-sync-status">ℹ️ Local Calendar (Add iCal feed in settings)</span>
+            <button class="btn-text-sm" id="refresh-ical-btn">Sync Calendar</button>
+          </div>
+        </article>
+
+        <!-- DAILY GRATITUDE & FOCUS -->
+        <article class="widget-card glass-card gratitude-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">✨</span>
+              <h2 class="card-title">Daily Focus & Gratitude</h2>
+            </div>
+          </div>
+          <div class="gratitude-body">
+            <div class="input-field-group">
+              <label for="daily-main-goal" class="input-label">🎯 What is your #1 Priority today?</label>
+              <input type="text" id="daily-main-goal" class="custom-input" placeholder="e.g. Complete project proposal and go for a run">
+            </div>
+            <div class="input-field-group">
+              <label for="daily-gratitude-1" class="input-label">🙏 3 Things I am thankful for today:</label>
+              <input type="text" id="daily-gratitude-1" class="custom-input gratitude-input" placeholder="1. Morning peace and scripture...">
+              <input type="text" id="daily-gratitude-2" class="custom-input gratitude-input" placeholder="2. Health and family...">
+              <input type="text" id="daily-gratitude-3" class="custom-input gratitude-input" placeholder="3. Opportunity to solve new challenges...">
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- COLUMN 2: TASKS, HABITS & PRODUCTIVITY -->
+      <section class="grid-col col-center">
+        
+        <!-- TASKS & TO-DO LIST WIDGET -->
+        <article class="widget-card glass-card tasks-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">✅</span>
+              <div>
+                <h2 class="card-title">Tasks & To-Do List</h2>
+                <span class="card-subtitle" id="tasks-count-subtitle">0 of 0 completed</span>
+              </div>
+            </div>
+            <div class="task-actions-wrap">
+              <button class="btn btn-sm btn-outline" id="sync-google-tasks-btn" title="Sync with Google Tasks">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Sync Google Tasks
+              </button>
+              <div class="task-filter-tabs">
+                <button class="tab-btn active" data-filter="all">All</button>
+                <button class="tab-btn" data-filter="work">Work</button>
+                <button class="tab-btn" data-filter="personal">Personal</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add Task Bar -->
+          <form class="add-task-form" id="add-task-form">
+            <input type="text" id="new-task-title" class="custom-input" placeholder="Add a new task for today..." required>
+            <select id="new-task-category" class="custom-select">
+              <option value="priority">🔥 Priority</option>
+              <option value="work">💼 Work</option>
+              <option value="personal">🏠 Personal</option>
+              <option value="quick">⚡ Quick Win</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Add</button>
+          </form>
+
+          <!-- Task List -->
+          <div class="task-list" id="task-list-container">
+            <!-- Dynamic task items -->
+          </div>
+        </article>
+
+        <!-- HABIT TRACKER WIDGET -->
+        <article class="widget-card glass-card habits-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">🌱</span>
+              <div>
+                <h2 class="card-title">Daily Habit Tracker</h2>
+                <span class="card-subtitle">Build consistent daily routines</span>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-outline" id="add-habit-btn">+ New Habit</button>
+          </div>
+
+          <div class="habits-grid" id="habits-container">
+            <!-- Dynamic habits -->
+          </div>
+        </article>
+
+        <!-- POMODORO FOCUS TIMER WIDGET -->
+        <article class="widget-card glass-card pomodoro-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">⏱️</span>
+              <div>
+                <h2 class="card-title">Focus Timer (Pomodoro)</h2>
+                <span class="card-subtitle" id="pomodoro-mode-label">Work Session (25 min)</span>
+              </div>
+            </div>
+            <div class="pomo-tabs">
+              <button class="pomo-tab active" data-time="25">Work</button>
+              <button class="pomo-tab" data-time="5">Short Break</button>
+              <button class="pomo-tab" data-time="15">Long Break</button>
+            </div>
+          </div>
+
+          <div class="pomodoro-body">
+            <div class="pomo-timer-display" id="pomo-display">25:00</div>
+            <div class="pomo-controls">
+              <button class="btn btn-primary btn-lg" id="pomo-start-btn">Start Focus</button>
+              <button class="btn btn-outline btn-lg" id="pomo-reset-btn">Reset</button>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- COLUMN 3: NEWS, NOTES & LAUNCHER -->
+      <section class="grid-col col-right">
+        
+        <!-- QUICK LAUNCHER / BOOKMARKS -->
+        <article class="widget-card glass-card launcher-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">🚀</span>
+              <h2 class="card-title">Quick Bookmarks</h2>
+            </div>
+            <button class="btn-text-sm" id="edit-shortcuts-btn">Edit Shortcuts</button>
+          </div>
+          <div class="shortcuts-grid" id="shortcuts-container">
+            <!-- Dynamic Shortcuts -->
+          </div>
+        </article>
+
+        <!-- NEWS & RSS AGGREGATOR WIDGET -->
+        <article class="widget-card glass-card news-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">📰</span>
+              <div>
+                <h2 class="card-title">News & Interest Feed</h2>
+                <span class="card-subtitle" id="news-feed-name">Latest Highlights</span>
+              </div>
+            </div>
+            <button class="btn-icon-sm" id="refresh-news-btn" title="Refresh RSS News">🔄</button>
+          </div>
+
+          <div class="news-category-pills" id="news-category-pills">
+            <button class="pill-btn active" data-category="tech">💻 Tech & Science</button>
+            <button class="pill-btn" data-category="world">🌍 World News</button>
+            <button class="pill-btn" data-category="faith">✝️ Faith & Devotion</button>
+            <button class="pill-btn" data-category="business">📈 Business</button>
+          </div>
+
+          <div class="news-feed-list" id="news-feed-container">
+            <div class="loading-spinner-box">Loading news feed...</div>
+          </div>
+        </article>
+
+        <!-- IDEAS & SCRATCHPAD WIDGET -->
+        <article class="widget-card glass-card scratchpad-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">💡</span>
+              <div>
+                <h2 class="card-title">Ideas & Quick Notes</h2>
+                <span class="card-subtitle">Scratchpad (Auto-saves)</span>
+              </div>
+            </div>
+            <div class="scratch-actions">
+              <button class="btn-text-sm" id="copy-scratch-btn" title="Copy notes to clipboard">📋 Copy</button>
+              <button class="btn-text-sm" id="clear-scratch-btn" title="Clear notes">🗑️</button>
+            </div>
+          </div>
+          <div class="scratchpad-body">
+            <textarea id="scratchpad-textarea" class="custom-textarea" placeholder="Jot down quick thoughts, meeting notes, project ideas, or prayers..."></textarea>
+          </div>
+        </article>
+
+      </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="app-footer">
+      <p>Daily Personal Landing Page • Designed for Laptop & Mobile • <span id="sync-status-footer">Local Storage Active</span></p>
+    </footer>
+
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- DEVOTIONAL READER MODAL -->
+  <div class="modal-overlay" id="devotional-modal">
+    <div class="modal-card modal-lg glass-card">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">My Utmost for His Highest</h2>
+          <span class="modal-subtitle">Oswald Chambers • Today's Reading</span>
+        </div>
+        <button class="modal-close-btn" id="close-devotional-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="devotional-full-content" id="modal-devotional-content">
+          <div class="devotional-modal-header">
+            <h1 id="modal-devo-title">My Eager Expectation</h1>
+            <div class="modal-devo-meta">
+              <span class="tag tag-accent" id="modal-devo-verse-ref">Philippians 1:20</span>
+            </div>
+          </div>
+          <div class="modal-devo-verse-box">
+            <p id="modal-devo-verse-text">"My eager expectation and hope is that I will not be at all ashamed, but that with all boldness, Christ will even now be exalted in my body, whether by life or by death."</p>
+          </div>
+          <div class="modal-devo-text-paragraphs" id="modal-devo-paragraphs">
+            <p>We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, "My eager expectation and hope is that I will not be at all ashamed..." Paul was determined to be completely surrendered to God.</p>
+            <p>Has God ever spoken to you about something specific? Is there a point of controversy between your soul and God? If so, get it settled at once. It is never a question of whether God will bless you—he will! The question is whether you will be utterly his.</p>
+            <p>To be "utterly His" means that nothing else matters—not your comfort, your reputation, or your plans. Our highest choice must always be His highest glory.</p>
+          </div>
+        </div>
+        
+        <!-- Option to view iframe or link -->
+        <div class="iframe-fallback-bar">
+          <span>Having trouble reading?</span>
+          <a href="https://utmost.org" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open Directly on Utmost.org ↗</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD EVENT MODAL -->
+  <div class="modal-overlay" id="event-modal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Add Event / Reminder</h2>
+        <button class="modal-close-btn" id="close-event-modal">&times;</button>
+      </div>
+      <form id="add-event-form" class="modal-body">
+        <div class="input-field-group">
+          <label class="input-label">Event Title</label>
+          <input type="text" id="event-title-input" class="custom-input" placeholder="e.g. Team Sync Meeting" required>
+        </div>
+        <div class="input-row">
+          <div class="input-field-group">
+            <label class="input-label">Time</label>
+            <input type="time" id="event-time-input" class="custom-input" value="09:00" required>
+          </div>
+          <div class="input-field-group">
+            <label class="input-label">Category</label>
+            <select id="event-category-input" class="custom-select">
+              <option value="meeting">💼 Meeting</option>
+              <option value="personal">🏠 Personal</option>
+              <option value="devotion">🙏 Devotion</option>
+              <option value="reminder">🔔 Reminder</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="cancel-event-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-card modal-md glass-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Dashboard Settings & Customization</h2>
+        <button class="modal-close-btn" id="close-settings-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="input-field-group">
+          <label class="input-label">Your Name</label>
+          <input type="text" id="setting-user-name" class="custom-input" placeholder="Miles">
+        </div>
+        
+        <div class="input-field-group">
+          <label class="input-label">Google Calendar / iCal Feed URL (.ics)</label>
+          <input type="url" id="setting-ical-url" class="custom-input" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+          <span class="field-help">Paste your Google Calendar secret iCal address to sync live events automatically.</span>
+        </div>
+
+        <div class="input-field-group">
+          <label class="input-label">Weather Location (City or Zip)</label>
+          <input type="text" id="setting-weather-city" class="custom-input" placeholder="e.g. Denver, CO or London">
+          <span class="field-help">Leave blank to use automatic browser geolocation.</span>
+        </div>
+
+        <div class="input-field-group">
+          <label class="input-label">Custom RSS News Feed URL</label>
+          <input type="url" id="setting-custom-rss" class="custom-input" placeholder="https://feeds.feedburner.com/...">
+        </div>
+
+        <div class="input-field-group">
+          <label class="input-label">Google OAuth Client ID (Optional for Live Google Tasks Sync)</label>
+          <input type="text" id="setting-google-client-id" class="custom-input" placeholder="e.g. 123456789-abc.apps.googleusercontent.com">
+          <span class="field-help">Allows 1-click live syncing with Work & Personal Google Tasks via Google Identity API.</span>
+        </div>
+
+        <hr class="divider">
+
+        <div class="settings-backup-section">
+          <h3>Data Backup & Restore</h3>
+          <p>Export your dashboard tasks, notes, habits, and preferences as a JSON file, or restore from a backup.</p>
+          <div class="backup-actions">
+            <button class="btn btn-outline btn-sm" id="export-data-btn">📥 Export Backup JSON</button>
+            <label class="btn btn-outline btn-sm" for="import-data-file">
+              📤 Import Backup JSON
+              <input type="file" id="import-data-file" accept=".json" style="display:none;">
+            </label>
+            <button class="btn btn-danger-outline btn-sm" id="reset-data-btn">⚠️ Reset All Data</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="save-settings-btn">Save Preferences</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
