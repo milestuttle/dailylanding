@@ -406,10 +406,20 @@
   }
 
   async function fetchProxyContent(url) {
+    // Direct fetch works natively for Google Calendar secret iCal URLs!
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.includes('BEGIN:VCALENDAR')) return text;
+      }
+    } catch (e) {
+      console.warn('Direct fetch failed, trying proxy fallbacks...', e);
+    }
+
     const proxies = [
-      u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}`
     ];
     for (const proxyFn of proxies) {
       try {
@@ -422,10 +432,7 @@
         console.warn('Proxy attempt failed:', e);
       }
     }
-    try {
-      const direct = await fetch(url);
-      return await direct.text();
-    } catch (e) { return null; }
+    return null;
   }
 
   function isEventOnDate(block, todayYMD, now) {
@@ -504,9 +511,20 @@
               const startTimeRaw = dtstartMatch[2] || '080000';
 
               if (isEventOnDate(block, todayYMD, now)) {
-                const hours = startTimeRaw.substring(0, 2);
-                const mins = startTimeRaw.substring(2, 4);
-                const time = `${hours}:${mins}`;
+                let time = '08:00';
+                if (dtstartMatch[2]) {
+                  const h = parseInt(dtstartMatch[2].substring(0, 2), 10);
+                  const m = parseInt(dtstartMatch[2].substring(2, 4), 10);
+                  if (block.includes('Z')) {
+                    const year = parseInt(dtstartMatch[1].substring(0, 4), 10);
+                    const month = parseInt(dtstartMatch[1].substring(4, 6), 10) - 1;
+                    const day = parseInt(dtstartMatch[1].substring(6, 8), 10);
+                    const d = new Date(Date.UTC(year, month, day, h, m));
+                    time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                  } else {
+                    time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                  }
+                }
 
                 allEvents.push({
                   id: 'ical-' + Math.random().toString(36).substring(2, 9),
