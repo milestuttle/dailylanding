@@ -121,6 +121,11 @@
         const parsed = JSON.parse(saved);
         const merged = { ...DEFAULT_STATE, ...parsed };
         merged.icalUrls = DEFAULT_STATE.icalUrls;
+        if (merged.tasks && Array.isArray(merged.tasks)) {
+          merged.tasks.forEach(t => {
+            if (t.category === 'personal') t.category = 'work';
+          });
+        }
         return merged;
       }
     } catch (e) {
@@ -708,16 +713,22 @@
       return;
     }
 
-    container.innerHTML = filtered.map(t => `
-      <div class="task-item ${t.completed ? 'completed' : ''}">
-        <label class="task-checkbox-label">
-          <input type="checkbox" class="task-checkbox" data-id="${t.id}" ${t.completed ? 'checked' : ''}>
-          <span class="task-title-text">${escapeHtml(t.title)}</span>
-        </label>
-        <span class="task-tag ${t.category}">${t.category}</span>
-        <button class="event-delete-btn delete-task-btn" data-id="${t.id}" title="Delete task">&times;</button>
-      </div>
-    `).join('');
+    container.innerHTML = filtered.map(t => {
+      let tagHtml = '';
+      if (t.category === 'priority') tagHtml = `<span class="task-tag priority">🔥 Priority</span>`;
+      else if (t.category === 'quick') tagHtml = `<span class="task-tag quick">⚡ Quick</span>`;
+
+      return `
+        <div class="task-item ${t.completed ? 'completed' : ''}">
+          <label class="task-checkbox-label">
+            <input type="checkbox" class="task-checkbox" data-id="${t.id}" ${t.completed ? 'checked' : ''}>
+            <span class="task-title-text">${escapeHtml(t.title)}</span>
+          </label>
+          ${tagHtml}
+          <button class="event-delete-btn delete-task-btn" data-id="${t.id}" title="Delete task">&times;</button>
+        </div>
+      `;
+    }).join('');
 
     container.querySelectorAll('.task-checkbox').forEach(chk => {
       chk.addEventListener('change', () => {
