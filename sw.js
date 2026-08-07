@@ -1,10 +1,11 @@
-const CACHE_NAME = 'daily-dashboard-v5';
+const CACHE_NAME = 'daily-dashboard-v6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  './apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {
