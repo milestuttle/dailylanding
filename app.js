@@ -1180,7 +1180,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v7') {
+          if (name !== 'daily-dashboard-v8') {
             caches.delete(name);
           }
         });
