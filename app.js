@@ -306,9 +306,21 @@
     const speakBtn = document.getElementById('speak-scripture-btn');
     if (speakBtn && 'speechSynthesis' in window) {
       speakBtn.addEventListener('click', () => {
-        const utterance = new SpeechSynthesisUtterance(`${devo.verseText}. ${devo.verseRef}`);
-        utterance.rate = 0.9;
-        window.speechSynthesis.speak(utterance);
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+          speakBtn.textContent = '🔊 Listen';
+          return;
+        }
+        window.speechSynthesis.cancel();
+        speakBtn.textContent = '⏳ Preparing...';
+        setTimeout(() => {
+          const utterance = new SpeechSynthesisUtterance(`${devo.verseText}. ${devo.verseRef}`);
+          utterance.rate = 0.95;
+          utterance.onend = () => { speakBtn.textContent = '🔊 Listen'; };
+          utterance.onerror = () => { speakBtn.textContent = '🔊 Listen'; };
+          speakBtn.textContent = '⏹️ Stop';
+          window.speechSynthesis.speak(utterance);
+        }, 250);
       });
     }
 
@@ -941,8 +953,13 @@
     const refreshBtn = document.getElementById('refresh-news-btn');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => {
+        refreshBtn.style.transform = 'rotate(180deg)';
+        refreshBtn.style.transition = 'transform 0.35s ease';
         const activePill = document.querySelector('.news-category-pills .pill-btn.active');
-        fetchNews(activePill ? activePill.dataset.category : 'local');
+        setTimeout(() => {
+          fetchNews(activePill ? activePill.dataset.category : 'local');
+          setTimeout(() => { refreshBtn.style.transform = 'none'; }, 400);
+        }, 300);
       });
     }
 
@@ -1056,9 +1073,12 @@
     const copyBtn = document.getElementById('copy-scratch-btn');
     if (copyBtn && textarea) {
       copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(textarea.value);
-        copyBtn.textContent = '✓ Copied!';
-        setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+        copyBtn.textContent = '⏳ Copying...';
+        setTimeout(() => {
+          navigator.clipboard.writeText(textarea.value);
+          copyBtn.textContent = '✓ Copied!';
+          setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+        }, 200);
       });
     }
 
@@ -1180,7 +1200,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v8') {
+          if (name !== 'daily-dashboard-v9') {
             caches.delete(name);
           }
         });
