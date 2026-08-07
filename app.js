@@ -52,10 +52,16 @@
 
   // --- RSS PRESETS ---
   const RSS_PRESETS = {
-    tech: 'https://feeds.feedburner.com/TechCrunch/',
-    world: 'http://feeds.bbci.co.uk/news/world/rss.xml',
-    faith: 'https://www.christianitytoday.com/ct/rss/',
-    business: 'https://search.cnbc.com/rs/search/combinedrenderer.view?query=business&partnerId=2000&target=news'
+    local: 'https://news.google.com/rss/search?q=site:canoncitydailyrecord.com+OR+%22Canon+City+Daily+Record%22&hl=en-US&gl=US&ceid=US:en',
+    world: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    national: 'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
+    tech: [
+      'https://futurism.com/feed',
+      'https://www.wired.com/feed/rss',
+      'https://www.technologyreview.com/feed/',
+      'https://feeds.arstechnica.com/arstechnica/index',
+      'https://newatlas.com/index.rss'
+    ]
   };
 
   // --- DEVOTIONAL CONTENT (OSWALD CHAMBERS CURATED READINGS) ---
@@ -933,32 +939,98 @@
     });
 
     const refreshBtn = document.getElementById('refresh-news-btn');
-    if (refreshBtn) refreshBtn.addEventListener('click', () => fetchNews('tech'));
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        const activePill = document.querySelector('.news-category-pills .pill-btn.active');
+        fetchNews(activePill ? activePill.dataset.category : 'local');
+      });
+    }
 
-    fetchNews('tech');
+    fetchNews('local');
   }
 
-  async function fetchNews(category = 'tech') {
+  function getCleanSourceTitle(feedTitle, defaultName) {
+    if (!feedTitle) return defaultName;
+    if (feedTitle.includes('Futurism')) return 'Futurism';
+    if (feedTitle.includes('WIRED') || feedTitle.includes('Wired')) return 'Wired';
+    if (feedTitle.includes('MIT')) return 'MIT Tech Review';
+    if (feedTitle.includes('Ars Technica')) return 'Ars Technica';
+    if (feedTitle.includes('New Atlas')) return 'New Atlas';
+    if (feedTitle.includes('NYT') || feedTitle.includes('New York Times')) return 'NY Times';
+    if (feedTitle.includes('Canon City') || feedTitle.includes('Google News')) return 'Cañon City Daily Record';
+    return feedTitle;
+  }
+
+  async function fetchNews(category = 'local') {
     const container = document.getElementById('news-feed-container');
+    const feedSubtitle = document.getElementById('news-feed-name');
     if (!container) return;
 
     container.innerHTML = `<div class="loading-spinner-box">Loading news feed...</div>`;
 
-    const feedUrl = category === 'custom' && state.customRssUrl 
-      ? state.customRssUrl 
-      : (RSS_PRESETS[category] || RSS_PRESETS.tech);
+    if (feedSubtitle) {
+      const titles = {
+        local: 'Cañon City Daily Record',
+        world: 'New York Times (World)',
+        national: 'New York Times (National)',
+        tech: 'Futurism, Wired, MIT, Ars Technica & New Atlas'
+      };
+      feedSubtitle.textContent = titles[category] || 'Latest Highlights';
+    }
 
     try {
-      const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`);
-      const data = await res.json();
+      let articles = [];
+      const preset = category === 'custom' && state.customRssUrl ? state.customRssUrl : (RSS_PRESETS[category] || RSS_PRESETS.local);
 
-      if (data.status === 'ok' && data.items && data.items.length > 0) {
-        container.innerHTML = data.items.slice(0, 6).map(item => `
+      if (Array.isArray(preset)) {
+        const results = await Promise.all(preset.map(async url => {
+          try {
+            const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
+            const data = await res.json();
+            const sourceName = getCleanSourceTitle(data.feed ? data.feed.title : '', 'Tech');
+            return (data.items || []).map(item => ({
+              title: item.title,
+              link: item.link,
+              pubDate: item.pubDate,
+              source: sourceName
+            }));
+          } catch (e) {
+            return [];
+          }
+        }));
+        articles = results.flat().sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, 8);
+      } else {
+        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(preset)}`);
+        const data = await res.json();
+
+        if (data.status === 'ok' && data.items && data.items.length > 0) {
+          const defaultSrc = category === 'local' ? 'Cañon City Daily Record' : 
+                             (category === 'world' ? 'NY Times World' : 
+                             (category === 'national' ? 'NY Times National' : 'News'));
+          const sourceName = getCleanSourceTitle(data.feed ? data.feed.title : '', defaultSrc);
+
+          articles = data.items.slice(0, 8).map(item => {
+            let cleanTitle = item.title || '';
+            if (cleanTitle.endsWith(' - Canon City Daily Record')) {
+              cleanTitle = cleanTitle.replace(/ - Canon City Daily Record$/, '');
+            }
+            return {
+              title: cleanTitle,
+              link: item.link,
+              pubDate: item.pubDate,
+              source: sourceName
+            };
+          });
+        }
+      }
+
+      if (articles.length > 0) {
+        container.innerHTML = articles.map(item => `
           <div class="news-card-item">
             <a href="${item.link}" target="_blank" rel="noopener" class="news-item-title">${escapeHtml(item.title)}</a>
             <div class="news-item-meta">
-              <span>${data.feed.title ? escapeHtml(data.feed.title) : 'News'}</span>
-              <span>${new Date(item.pubDate).toLocaleDateString()}</span>
+              <span class="news-source-badge">${escapeHtml(item.source)}</span>
+              <span>${item.pubDate ? new Date(item.pubDate).toLocaleDateString() : ''}</span>
             </div>
           </div>
         `).join('');
@@ -1108,7 +1180,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v4') {
+          if (name !== 'daily-dashboard-v5') {
             caches.delete(name);
           }
         });
