@@ -13,8 +13,6 @@ A beautiful, modern, responsive personal landing page designed to give you every
 - **📅 Calendar & Agenda Sync**:
   - Daily timeline for scheduled meetings and events.
   - Integration with **Google Calendar / Outlook** via public or private `.ics` iCal feed URL.
-- **✅ Tasks & To-Do Checklist**:
-  - Categorized tasks (🔥 Priority, 💼 Work, 🏠 Personal, ⚡ Quick Wins) with check animations and filters.
 - **🌱 Daily Habit Tracker**:
   - Visual streak counter for morning prayer, exercise, reading, water intake, etc.
 - **📰 News & RSS Feed Aggregator**:

@@ -44,8 +44,7 @@
       { title: 'Drive', url: 'https://drive.google.com', icon: '📁' },
       { title: 'GitHub', url: 'https://github.com', icon: '🐙' },
       { title: 'Bible', url: 'https://www.biblegateway.com', icon: '✝️' },
-      { title: 'News', url: 'https://news.google.com', icon: '📰' },
-      { title: 'Tasks', url: '#tasks', icon: '✅' }
+      { title: 'News', url: 'https://news.google.com', icon: '📰' }
     ]
   };
 
@@ -102,7 +101,6 @@
     initWeather();
     initDevotional();
     initAgenda();
-    initTasks();
     initHabits();
     initPomodoro();
     initShortcuts();
