@@ -1105,7 +1105,21 @@
 
   // --- PWA SERVICE WORKER ---
   function initPWA() {
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        names.forEach(name => {
+          if (name !== 'daily-dashboard-v4') {
+            caches.delete(name);
+          }
+        });
+      });
+    }
     if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) {
+          registration.update();
+        }
+      });
       navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW error:', err));
     }
   }
