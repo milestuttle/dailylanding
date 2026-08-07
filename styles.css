@@ -1226,6 +1226,14 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
     padding: 0.6rem;
   }
 
+  /* REMOVE INTERNAL SCROLL TRAPS ON MOBILE SO ENTIRE PAGE SCROLLS SMOOTHLY */
+  .agenda-timeline,
+  .news-feed-list,
+  .habit-list {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+
   .modal-card {
     width: 94%;
     max-height: 85vh;
