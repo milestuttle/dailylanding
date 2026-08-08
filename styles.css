@@ -200,7 +200,6 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 2px solid var(--primary);
   border-radius: var(--radius-lg);
   gap: 1rem;
 }
@@ -581,7 +580,6 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   min-width: 0;
   box-sizing: border-box;
   overflow: hidden;
-  border-top: 1.5px solid var(--card-top-accent, rgba(var(--primary-rgb), 0.25));
   border-radius: var(--radius-lg);
 }
 
@@ -697,7 +695,6 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 
 /* DEVOTIONAL CARD */
 .devotional-card {
-  border-left: 4px solid var(--primary);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
