@@ -15,6 +15,7 @@
   --card-bg: rgba(24, 29, 47, 0.75);
   --card-border: rgba(255, 255, 255, 0.09);
   --card-hover-border: rgba(255, 100, 45, 0.5);
+  --card-top-accent: rgba(255, 100, 45, 0.25);
   --card-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.45), 0 0 1px rgba(255, 255, 255, 0.1);
   
   --text-primary: #f8fafc;
@@ -44,13 +45,14 @@
   --transition-normal: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* LIGHT MODE THEME OVERRIDES (SEMrush Light Clean) */
+/* LIGHT MODE THEME OVERRIDES (SEMrush Clean Slate & Fire Orange) */
 [data-theme="light"] {
   --bg-color: #f4f6f9;
   --bg-gradient: radial-gradient(circle at 10% 20%, #ffffff 0%, #f4f6f9 60%, #e2e8f0 100%);
   --card-bg: rgba(255, 255, 255, 0.92);
   --card-border: rgba(203, 213, 225, 0.8);
   --card-hover-border: rgba(255, 100, 45, 0.6);
+  --card-top-accent: rgba(255, 100, 45, 0.2);
   --card-shadow: 0 10px 30px -5px rgba(148, 163, 184, 0.3), 0 1px 3px rgba(0, 0, 0, 0.05);
 
   --text-primary: #0f172a;
@@ -61,14 +63,38 @@
   --input-border: rgba(203, 213, 225, 0.9);
 }
 
-/* MIDNIGHT CYBER THEME OVERRIDES */
-[data-theme="midnight"] {
-  --bg-color: #030712;
-  --bg-gradient: radial-gradient(circle at 50% 10%, #1e1b4b 0%, #030712 70%);
-  --card-bg: rgba(17, 24, 39, 0.75);
-  --card-border: rgba(147, 51, 234, 0.25);
-  --card-hover-border: rgba(168, 85, 247, 0.6);
-  --accent-gradient: linear-gradient(135deg, #a855f7 0%, #06b6d4 100%);
+/* CYBER EMERALD THEME OVERRIDES (SEMrush Analytics & Emerald) */
+[data-theme="emerald"] {
+  --bg-color: #09141d;
+  --bg-gradient: radial-gradient(circle at 15% 15%, #102434 0%, #09141d 50%, #050b11 100%);
+  --card-bg: rgba(16, 32, 48, 0.78);
+  --card-border: rgba(255, 255, 255, 0.09);
+  --card-hover-border: rgba(16, 185, 129, 0.5);
+  --card-top-accent: rgba(16, 185, 129, 0.25);
+
+  --primary-rgb: 16, 185, 129;
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --accent: #06b6d4;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);
+  --input-focus: rgba(16, 185, 129, 0.6);
+}
+
+/* VIOLET INDIGO THEME OVERRIDES (SEMrush Enterprise Violet) */
+[data-theme="violet"] {
+  --bg-color: #0f1021;
+  --bg-gradient: radial-gradient(circle at 15% 15%, #1e1b4b 0%, #0f1021 50%, #070813 100%);
+  --card-bg: rgba(24, 25, 52, 0.78);
+  --card-border: rgba(255, 255, 255, 0.09);
+  --card-hover-border: rgba(139, 92, 246, 0.5);
+  --card-top-accent: rgba(139, 92, 246, 0.25);
+
+  --primary-rgb: 139, 92, 246;
+  --primary: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --accent: #38bdf8;
+  --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #06b6d4 100%);
+  --input-focus: rgba(139, 92, 246, 0.6);
 }
 
 /* RESET & BASE */
@@ -416,7 +442,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   min-width: 0;
   box-sizing: border-box;
   overflow: hidden;
-  border-top: 3px solid rgba(255, 100, 45, 0.45);
+  border-top: 1.5px solid var(--card-top-accent, rgba(255, 100, 45, 0.25));
   border-radius: var(--radius-lg);
 }
 

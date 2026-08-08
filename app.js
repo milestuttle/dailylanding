@@ -152,7 +152,7 @@
     const themeBtn = document.getElementById('theme-toggle-btn');
     if (themeBtn) {
       themeBtn.addEventListener('click', () => {
-        const themes = ['dark', 'light', 'midnight'];
+        const themes = ['dark', 'emerald', 'violet', 'light'];
         const current = state.theme || 'dark';
         const next = themes[(themes.indexOf(current) + 1) % themes.length];
         state.theme = next;
@@ -1200,7 +1200,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v12') {
+          if (name !== 'daily-dashboard-v13') {
             caches.delete(name);
           }
         });
