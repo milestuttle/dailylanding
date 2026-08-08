@@ -619,16 +619,21 @@
       return;
     }
 
-    const eventsHtml = state.events.map(e => `
-      <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${e.time}</span>
-          <span class="tag ${e.category === 'work' ? 'tag-accent' : ''}" style="font-size: 0.62rem;">${e.category}</span>
+    const eventsHtml = state.events.map(e => {
+      const isWork = e.category === 'work';
+      const email = isWork ? 'miles.tuttle@canoncityschools.org' : 'mbtutt@gmail.com';
+      const label = isWork ? '💼 WORK' : '🏠 PERSONAL';
+      return `
+        <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.08); border: 1px solid var(--card-border); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${formatTime12(e.time)}</span>
+            <span class="tag ${isWork ? 'tag-accent' : ''}" style="font-size: 0.65rem;">${label} • ${email}</span>
+          </div>
+          <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
+          ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
         </div>
-        <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
-        ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     modalBody.innerHTML = `
       <div style="margin-bottom: 0.85rem; font-weight: 700; color: var(--text-primary);">Total Scheduled Events: ${totalEvents}</div>
@@ -650,16 +655,21 @@
       return;
     }
 
-    listEl.innerHTML = state.events.map(ev => `
-      <div class="event-item">
-        <span class="event-time-badge">${formatTime12(ev.time)}</span>
-        <div class="event-details">
-          <div class="event-title">${escapeHtml(ev.title)}</div>
-          <div class="event-cat">${ev.category.toUpperCase()}</div>
+    listEl.innerHTML = state.events.map(ev => {
+      const isWork = ev.category === 'work';
+      const email = isWork ? 'miles.tuttle@canoncityschools.org' : 'mbtutt@gmail.com';
+      const catLabel = isWork ? '💼 WORK' : '🏠 PERSONAL';
+      return `
+        <div class="event-item">
+          <span class="event-time-badge">${formatTime12(ev.time)}</span>
+          <div class="event-details">
+            <div class="event-title">${escapeHtml(ev.title)}</div>
+            <div class="event-cat" style="${isWork ? 'color: var(--primary); font-weight: 700;' : ''}">${catLabel} • ${email}</div>
+          </div>
+          <button class="event-delete-btn" data-id="${ev.id}" title="Delete event">&times;</button>
         </div>
-        <button class="event-delete-btn" data-id="${ev.id}" title="Delete event">&times;</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     listEl.querySelectorAll('.event-delete-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1524,7 +1534,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v39') {
+          if (name !== 'daily-dashboard-v40') {
             caches.delete(name);
           }
         });
