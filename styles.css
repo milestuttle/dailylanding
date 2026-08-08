@@ -9,31 +9,31 @@
   --font-serif: 'Newsreader', Georgia, serif;
   --font-mono: 'JetBrains Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
 
-  /* Theme Defaults (Dark Glass) */
-  --bg-color: #0b0f19;
-  --bg-gradient: radial-gradient(circle at 15% 15%, #1e1b4b 0%, #0f172a 40%, #090d16 100%);
-  --card-bg: rgba(30, 41, 59, 0.65);
-  --card-border: rgba(255, 255, 255, 0.1);
-  --card-hover-border: rgba(99, 102, 241, 0.4);
-  --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.1);
+  /* Theme Defaults (SEMrush Deep Navy & Fire Orange Energy) */
+  --bg-color: #121625;
+  --bg-gradient: radial-gradient(circle at 15% 15%, #1f253d 0%, #121625 45%, #0b0e18 100%);
+  --card-bg: rgba(24, 29, 47, 0.75);
+  --card-border: rgba(255, 255, 255, 0.09);
+  --card-hover-border: rgba(255, 100, 45, 0.5);
+  --card-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.45), 0 0 1px rgba(255, 255, 255, 0.1);
   
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   
-  --primary-rgb: 99, 102, 241;
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --accent: #38bdf8;
-  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+  --primary-rgb: 255, 100, 45;
+  --primary: #ff642d;
+  --primary-hover: #e04812;
+  --accent: #ff8a00;
+  --accent-gradient: linear-gradient(135deg, #ff642d 0%, #ff8a00 50%, #ff2a55 100%);
   
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
   
-  --input-bg: rgba(15, 23, 42, 0.6);
+  --input-bg: rgba(14, 18, 30, 0.7);
   --input-border: rgba(255, 255, 255, 0.12);
-  --input-focus: rgba(99, 102, 241, 0.6);
+  --input-focus: rgba(255, 100, 45, 0.6);
 
   --radius-sm: 8px;
   --radius-md: 14px;
@@ -44,21 +44,21 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* LIGHT MODE THEME OVERRIDES */
+/* LIGHT MODE THEME OVERRIDES (SEMrush Light Clean) */
 [data-theme="light"] {
-  --bg-color: #f1f5f9;
-  --bg-gradient: radial-gradient(circle at 10% 20%, #e0e7ff 0%, #f1f5f9 60%, #e2e8f0 100%);
-  --card-bg: rgba(255, 255, 255, 0.8);
-  --card-border: rgba(203, 213, 225, 0.6);
-  --card-hover-border: rgba(99, 102, 241, 0.5);
-  --card-shadow: 0 10px 25px -5px rgba(148, 163, 184, 0.25), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --bg-color: #f4f6f9;
+  --bg-gradient: radial-gradient(circle at 10% 20%, #ffffff 0%, #f4f6f9 60%, #e2e8f0 100%);
+  --card-bg: rgba(255, 255, 255, 0.92);
+  --card-border: rgba(203, 213, 225, 0.8);
+  --card-hover-border: rgba(255, 100, 45, 0.6);
+  --card-shadow: 0 10px 30px -5px rgba(148, 163, 184, 0.3), 0 1px 3px rgba(0, 0, 0, 0.05);
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
 
-  --input-bg: rgba(255, 255, 255, 0.9);
-  --input-border: rgba(203, 213, 225, 0.8);
+  --input-bg: rgba(255, 255, 255, 0.95);
+  --input-border: rgba(203, 213, 225, 0.9);
 }
 
 /* MIDNIGHT CYBER THEME OVERRIDES */
@@ -884,12 +884,13 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 }
 
 .news-source-badge {
-  background: rgba(56, 189, 248, 0.12);
-  color: var(--primary-light, #60a5fa);
-  padding: 0.15rem 0.5rem;
+  background: rgba(255, 100, 45, 0.14);
+  color: #ff7a45;
+  padding: 0.18rem 0.55rem;
   border-radius: 4px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.7rem;
+  letter-spacing: 0.02em;
 }
 
 /* SCRATCHPAD */
@@ -977,13 +978,15 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--accent-gradient);
   color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(255, 100, 45, 0.3);
 }
 
 .btn-primary:hover {
-  background: var(--primary-hover);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  background: linear-gradient(135deg, #e04812 0%, #ff642d 100%);
+  box-shadow: 0 6px 20px rgba(255, 100, 45, 0.45);
 }
 
 .btn-accent {
