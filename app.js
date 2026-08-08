@@ -112,6 +112,9 @@
     initGratitude();
     initSettingsModal();
     initCommandPalette();
+    initWidgetCollapse();
+    initDensityToggle();
+    updateKpiStats();
     initPWA();
   });
 
@@ -623,6 +626,7 @@
       state.events = [...manualEvents, ...allEvents].sort((a, b) => a.time.localeCompare(b.time));
       saveState();
       renderAgenda();
+      updateKpiStats();
 
       if (allEvents.length > 0) {
         if (statusEl) statusEl.textContent = `✅ Synced ${allEvents.length} Work & Personal events`;
@@ -1137,6 +1141,7 @@
       textarea.addEventListener('input', () => {
         state.scratchpad = textarea.value;
         saveState();
+        updateKpiStats();
       });
     }
 
@@ -1286,7 +1291,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v21') {
+          if (name !== 'daily-dashboard-v22') {
             caches.delete(name);
           }
         });
@@ -1512,6 +1517,83 @@
             filtered[idx].action();
           }
         });
+      });
+    }
+  }
+
+  // --- TOP KPI QUICK-STATS BAR & COLLAPSE / DENSITY LOGIC (JUSTINMIND UX BEST PRACTICES #2 & #3) ---
+  function updateKpiStats() {
+    const streakVal = document.getElementById('kpi-streak-val');
+    const eventsVal = document.getElementById('kpi-events-val');
+    const newsVal = document.getElementById('kpi-news-val');
+    const notesVal = document.getElementById('kpi-notes-val');
+
+    if (streakVal && state.habits && Array.isArray(state.habits)) {
+      const maxStreak = Math.max(0, ...state.habits.map(h => h.streak || 0));
+      streakVal.textContent = `${maxStreak} Days`;
+    }
+
+    if (eventsVal) {
+      const eventCount = state.events ? state.events.length : 0;
+      eventsVal.textContent = `${eventCount} Event${eventCount === 1 ? '' : 's'}`;
+    }
+
+    if (newsVal) {
+      newsVal.textContent = '4 Active';
+    }
+
+    if (notesVal) {
+      if (state.scratchpad && state.scratchpad.trim().length > 0) {
+        notesVal.textContent = `${state.scratchpad.trim().length} chars`;
+      } else {
+        notesVal.textContent = 'Saved';
+      }
+    }
+  }
+
+  function initWidgetCollapse() {
+    state.collapsedWidgets = state.collapsedWidgets || [];
+
+    // Apply saved collapsed state
+    document.querySelectorAll('.widget-card').forEach(card => {
+      const toggleBtn = card.querySelector('.widget-toggle-btn');
+      if (toggleBtn) {
+        const widgetName = toggleBtn.dataset.widget;
+        if (state.collapsedWidgets.includes(widgetName)) {
+          card.classList.add('collapsed');
+        }
+
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          card.classList.toggle('collapsed');
+          const isCollapsed = card.classList.contains('collapsed');
+
+          if (isCollapsed) {
+            if (!state.collapsedWidgets.includes(widgetName)) {
+              state.collapsedWidgets.push(widgetName);
+            }
+          } else {
+            state.collapsedWidgets = state.collapsedWidgets.filter(w => w !== widgetName);
+          }
+          saveState();
+        });
+      }
+    });
+  }
+
+  function initDensityToggle() {
+    const btn = document.getElementById('density-toggle-btn');
+    const currentDensity = state.density || 'normal';
+    document.documentElement.setAttribute('data-density', currentDensity);
+
+    if (btn) {
+      btn.textContent = currentDensity === 'compact' ? '📐 Roomy' : '📐 Compact';
+      btn.addEventListener('click', () => {
+        const nextDensity = (state.density || 'normal') === 'normal' ? 'compact' : 'normal';
+        state.density = nextDensity;
+        document.documentElement.setAttribute('data-density', nextDensity);
+        btn.textContent = nextDensity === 'compact' ? '📐 Roomy' : '📐 Compact';
+        saveState();
       });
     }
   }

@@ -44,11 +44,47 @@
         </button>
       </div>
       <div class="nav-status-group">
+        <button class="btn-text-sm" id="density-toggle-btn" title="Toggle Density (Normal / Compact)">📐 Compact</button>
         <span class="status-pulse-badge">
           <span class="pulse-dot"></span> LIVE SYNC ACTIVE
         </span>
       </div>
     </nav>
+
+    <!-- TOP KPI QUICK-STATS BAR (JUSTINMIND UX BEST PRACTICE #3) -->
+    <section class="kpi-stats-bar glass-card">
+      <div class="kpi-stat-item">
+        <span class="kpi-icon">🔥</span>
+        <div class="kpi-details">
+          <span class="kpi-value" id="kpi-streak-val">7 Days</span>
+          <span class="kpi-label">Habit Streak</span>
+        </div>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-stat-item">
+        <span class="kpi-icon">📅</span>
+        <div class="kpi-details">
+          <span class="kpi-value" id="kpi-events-val">0 Events</span>
+          <span class="kpi-label">Today's Schedule</span>
+        </div>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-stat-item">
+        <span class="kpi-icon">📰</span>
+        <div class="kpi-details">
+          <span class="kpi-value" id="kpi-news-val">4 Active</span>
+          <span class="kpi-label">News Feeds</span>
+        </div>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-stat-item">
+        <span class="kpi-icon">💡</span>
+        <div class="kpi-details">
+          <span class="kpi-value" id="kpi-notes-val">Saved</span>
+          <span class="kpi-label">Scratchpad</span>
+        </div>
+      </div>
+    </section>
 
     <!-- TOP HEADER / HERO BAR -->
     <header class="hero-header glass-card">
@@ -111,9 +147,10 @@
                 <span class="card-subtitle">Daily Devotional by Oswald Chambers</span>
               </div>
             </div>
-            <a href="https://utmost.org" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Open Utmost.org directly">
-              Visit utmost.org ↗
-            </a>
+            <div class="card-header-actions">
+              <a href="https://utmost.org" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Open Utmost.org directly">Visit utmost.org ↗</a>
+              <button class="btn-icon-sm widget-toggle-btn" data-widget="devotional" title="Toggle Devotional Collapse">▼</button>
+            </div>
           </div>
 
           <div class="devotional-body">
@@ -156,7 +193,10 @@
                 <span class="card-subtitle" id="agenda-date-subtitle">Loading...</span>
               </div>
             </div>
-            <button class="btn btn-sm btn-accent" id="add-event-btn">+ Add Event</button>
+            <div class="card-header-actions">
+              <button class="btn btn-sm btn-accent" id="add-event-btn">+ Add Event</button>
+              <button class="btn-icon-sm widget-toggle-btn" data-widget="agenda" title="Toggle Schedule Collapse">▼</button>
+            </div>
           </div>
 
           <div class="agenda-body">
@@ -186,7 +226,10 @@
                 <span class="header-count-badge" id="shortcuts-count-badge">Shortcuts</span>
               </div>
             </div>
-            <button class="btn-text-sm" id="edit-shortcuts-btn">Edit Shortcuts</button>
+            <div class="card-header-actions">
+              <button class="btn-text-sm" id="edit-shortcuts-btn">Edit Shortcuts</button>
+              <button class="btn-icon-sm widget-toggle-btn" data-widget="launcher" title="Toggle Bookmarks Collapse">▼</button>
+            </div>
           </div>
           <div class="shortcuts-grid" id="shortcuts-container">
             <!-- Dynamic Shortcuts -->
@@ -206,7 +249,10 @@
                 <span class="card-subtitle" id="news-feed-name">Latest Highlights</span>
               </div>
             </div>
-            <button class="btn-icon-sm" id="refresh-news-btn" title="Refresh RSS News">🔄</button>
+            <div class="card-header-actions">
+              <button class="btn-icon-sm" id="refresh-news-btn" title="Refresh RSS News">🔄</button>
+              <button class="btn-icon-sm widget-toggle-btn" data-widget="news" title="Toggle News Collapse">▼</button>
+            </div>
           </div>
 
           <div class="news-category-pills" id="news-category-pills">
@@ -237,6 +283,7 @@
             <div class="scratch-actions">
               <button class="btn-text-sm" id="copy-scratch-btn" title="Copy notes to clipboard">📋 Copy</button>
               <button class="btn-text-sm" id="clear-scratch-btn" title="Clear notes">🗑️</button>
+              <button class="btn-icon-sm widget-toggle-btn" data-widget="scratchpad" title="Toggle Scratchpad Collapse">▼</button>
             </div>
           </div>
           <div class="scratchpad-body">
