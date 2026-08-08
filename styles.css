@@ -1805,7 +1805,20 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   text-align: center;
   font-size: 0.8rem;
   color: var(--text-muted);
-  padding: 1rem 0;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.app-footer .nav-status-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
 }
 
 .divider {
