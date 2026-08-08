@@ -51,41 +51,6 @@
       </div>
     </nav>
 
-    <!-- TOP KPI QUICK-STATS BAR (JUSTINMIND UX BEST PRACTICE #3) -->
-    <section class="kpi-stats-bar glass-card">
-      <div class="kpi-stat-item">
-        <span class="kpi-icon">🔥</span>
-        <div class="kpi-details">
-          <span class="kpi-value" id="kpi-streak-val">7 Days</span>
-          <span class="kpi-label">Habit Streak</span>
-        </div>
-      </div>
-      <div class="kpi-divider"></div>
-      <div class="kpi-stat-item">
-        <span class="kpi-icon">📅</span>
-        <div class="kpi-details">
-          <span class="kpi-value" id="kpi-events-val">0 Events</span>
-          <span class="kpi-label">Today's Schedule</span>
-        </div>
-      </div>
-      <div class="kpi-divider"></div>
-      <div class="kpi-stat-item">
-        <span class="kpi-icon">📰</span>
-        <div class="kpi-details">
-          <span class="kpi-value" id="kpi-news-val">4 Active</span>
-          <span class="kpi-label">News Feeds</span>
-        </div>
-      </div>
-      <div class="kpi-divider"></div>
-      <div class="kpi-stat-item">
-        <span class="kpi-icon">💡</span>
-        <div class="kpi-details">
-          <span class="kpi-value" id="kpi-notes-val">Saved</span>
-          <span class="kpi-label">Scratchpad</span>
-        </div>
-      </div>
-    </section>
-
     <!-- TOP HEADER / HERO BAR -->
     <header class="hero-header glass-card">
       <div class="hero-greeting-container">
@@ -97,6 +62,15 @@
       </div>
 
       <div class="hero-widgets">
+        <!-- Schedule Events KPI Chip -->
+        <div class="events-kpi-chip" title="Today's Schedule Events">
+          <span class="kpi-chip-icon">📅</span>
+          <div class="kpi-chip-text">
+            <span class="kpi-chip-val" id="kpi-events-val">0 Events</span>
+            <span class="kpi-chip-label">Today's Schedule</span>
+          </div>
+        </div>
+
         <!-- Live Clock -->
         <div class="clock-card">
           <div class="clock-time" id="digital-clock">12:00</div>

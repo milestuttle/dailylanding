@@ -263,59 +263,56 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   gap: 0.65rem;
 }
 
-/* TOP KPI QUICK-STATS BAR (JUSTINMIND UX BEST PRACTICE #3) */
-.kpi-stats-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding: 0.65rem 1.25rem;
-  border-radius: var(--radius-lg);
-  border-top: 1.5px solid var(--card-top-accent, rgba(var(--primary-rgb), 0.25));
-  gap: 0.75rem;
-}
-
-.kpi-stat-item {
+/* HERO EVENTS KPI CHIP (NEXT TO CLOCK) */
+.events-kpi-chip {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  padding: 0.55rem 0.85rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border);
+  border-top: 1.5px solid var(--primary);
+  border-radius: var(--radius-md);
+  transition: var(--transition-fast);
 }
 
-.kpi-icon {
-  font-size: 1.15rem;
-  width: 32px;
-  height: 32px;
+.events-kpi-chip:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.kpi-chip-icon {
+  font-size: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
   background: rgba(var(--primary-rgb), 0.12);
   border: 1px solid rgba(var(--primary-rgb), 0.25);
   border-radius: var(--radius-sm);
 }
 
-.kpi-details {
+.kpi-chip-text {
   display: flex;
   flex-direction: column;
 }
 
-.kpi-value {
+.kpi-chip-val {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1.1;
 }
 
-.kpi-label {
-  font-size: 0.68rem;
+.kpi-chip-label {
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-}
-
-.kpi-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--card-border);
 }
 
 .nav-brand-group {

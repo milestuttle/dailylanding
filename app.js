@@ -1291,7 +1291,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v22') {
+          if (name !== 'daily-dashboard-v23') {
             caches.delete(name);
           }
         });
@@ -1521,33 +1521,11 @@
     }
   }
 
-  // --- TOP KPI QUICK-STATS BAR & COLLAPSE / DENSITY LOGIC (JUSTINMIND UX BEST PRACTICES #2 & #3) ---
   function updateKpiStats() {
-    const streakVal = document.getElementById('kpi-streak-val');
     const eventsVal = document.getElementById('kpi-events-val');
-    const newsVal = document.getElementById('kpi-news-val');
-    const notesVal = document.getElementById('kpi-notes-val');
-
-    if (streakVal && state.habits && Array.isArray(state.habits)) {
-      const maxStreak = Math.max(0, ...state.habits.map(h => h.streak || 0));
-      streakVal.textContent = `${maxStreak} Days`;
-    }
-
     if (eventsVal) {
       const eventCount = state.events ? state.events.length : 0;
       eventsVal.textContent = `${eventCount} Event${eventCount === 1 ? '' : 's'}`;
-    }
-
-    if (newsVal) {
-      newsVal.textContent = '4 Active';
-    }
-
-    if (notesVal) {
-      if (state.scratchpad && state.scratchpad.trim().length > 0) {
-        notesVal.textContent = `${state.scratchpad.trim().length} chars`;
-      } else {
-        notesVal.textContent = 'Saved';
-      }
     }
   }
 
