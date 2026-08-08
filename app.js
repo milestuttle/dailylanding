@@ -61,8 +61,20 @@
     ]
   };
 
-  // --- DEVOTIONAL CONTENT (OSWALD CHAMBERS CURATED READINGS) ---
+  // --- DEVOTIONAL CONTENT (OSWALD CHAMBERS MY UTMOST FOR HIS HIGHEST) ---
   const DAILY_DEVOTIONALS = [
+    {
+      title: "The Holy One Born in You",
+      verseRef: "Luke 1:35",
+      verseText: "The holy one to be born will be called the Son of God.",
+      excerpt: "If I have been born again from above, the Son of God Himself has been born into my mortal flesh. What was true of the virgin Mary in the introduction of God’s Son into this earth is true in every saved soul: the Son of God is born into us by the direct act of God.",
+      paragraphs: [
+        "If I have been born again from above, the Son of God himself has been born into my mortal flesh. What was true of the virgin Mary in the introduction of God’s Son into this earth is true in every saved soul: the Son of God is born into us by the direct act of God.",
+        "As a child of God, I have to exercise the right of a child to always be face-to-face with my Father. Am I giving the Son’s holy innocence and simplicity and oneness with the Father a chance to manifest themselves in me? Am I continually responding with amazement to what my common sense tells me to do, saying to it, 'Why are you trying to warn me off? Don’t you know that I have to be in my Father’s house?' Whatever my external circumstances, the holy, innocent, eternal Child within me must remain in contact with the Father.",
+        "Am I simple enough to identify myself with my Lord in this way? Is He getting His way with me? Is God realizing that His Son has been formed in me, or have I put the Lord to the side?",
+        "Oh, the uproar of these days! Everyone is clamoring—for what? For the Son of God to be put to death. There’s no room for the Son of God, no room for quiet, holy communion with the Father."
+      ]
+    },
     {
       title: "My Eager Expectation",
       verseRef: "Philippians 1:20",
@@ -70,29 +82,7 @@
       excerpt: "We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, 'My eager expectation and hope is that I will not be at all ashamed...' Paul was determined to be completely surrendered to God.",
       paragraphs: [
         "We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, 'My eager expectation and hope is that I will not be at all ashamed...' Paul was determined to be completely surrendered to God.",
-        "Has God ever spoken to you about something specific? Is there a point of controversy between your soul and God? If so, get it settled at once. It is never a question of whether God will bless you—he will! The question is whether you will be utterly his.",
-        "To be 'utterly His' means that nothing else matters—not your comfort, your reputation, or your plans. Our highest choice must always be His highest glory."
-      ]
-    },
-    {
-      title: "The High Calling of God",
-      verseRef: "Philippians 3:14",
-      verseText: "I press on toward the goal for the prize of the upward call of God in Christ Jesus.",
-      excerpt: "Never choose to be a worker for God, but if God has laid His hands on you, woe be to you if you turn to the right hand or to the left. We are not called to be useful, but to be His.",
-      paragraphs: [
-        "Never choose to be a worker for God, but if God has laid His hands on you, woe be to you if you turn to the right hand or to the left. We are not called to be useful, but to be His.",
-        "When we focus on our usefulness, we lose the vision of God. But when we focus on God, He makes us useful beyond our wildest imagination.",
-        "Press on today with single-minded devotion to Jesus Christ."
-      ]
-    },
-    {
-      title: "Surrender to God",
-      verseRef: "Romans 12:1",
-      verseText: "I appeal to you therefore, brothers, by the mercies of God, to present your bodies as a living sacrifice, holy and acceptable to God.",
-      excerpt: "Surrender is not a surrender of our gifts or our abilities, but a surrender of our will. When the will is surrendered, God takes up every talent and consecrates it.",
-      paragraphs: [
-        "Surrender is not a surrender of our gifts or our abilities, but a surrender of our will. When the will is surrendered, God takes up every talent and consecrates it.",
-        "It is not a question of what you can give to God, but what you allow God to give to you. Surrender your plans for today into His trustworthy hands."
+        "Has God ever spoken to you about something specific? Is there a point of controversy between your soul and God? If so, get it settled at once. It is never a question of whether God will bless you—he will! The question is whether you will be utterly his."
       ]
     }
   ];
@@ -288,11 +278,10 @@
     return { desc: 'Thunderstorm', icon: '⛈️' };
   }
 
-  // --- DEVOTIONAL HUB ---
-  function initDevotional() {
-    const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
-    const devo = DAILY_DEVOTIONALS[dayOfYear % DAILY_DEVOTIONALS.length];
+  let activeDevotional = DAILY_DEVOTIONALS[0];
 
+  function renderDevotional(devo) {
+    activeDevotional = devo;
     const verseText = document.getElementById('daily-scripture-text');
     const verseRef = document.getElementById('daily-scripture-ref');
     const devoTitle = document.getElementById('devotional-title');
@@ -302,6 +291,42 @@
     if (verseRef) verseRef.textContent = `— ${devo.verseRef}`;
     if (devoTitle) devoTitle.textContent = devo.title;
     if (devoExcerpt) devoExcerpt.textContent = devo.excerpt;
+  }
+
+  async function fetchUtmostDevotional() {
+    try {
+      const html = await fetchProxyContent('https://utmost.org/modern-classic/today/');
+      if (html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        const mainText = doc.body ? doc.body.textContent : '';
+        if (mainText.includes('Luke') || mainText.includes('God') || mainText.includes('Son')) {
+          // Extract scripture & paragraphs from live page
+          const paragraphs = Array.from(doc.querySelectorAll('p'))
+            .map(p => p.textContent.trim())
+            .filter(txt => txt.length > 30 && !txt.includes('©') && !txt.includes('Copyright'));
+
+          if (paragraphs.length >= 2) {
+            const liveDevo = {
+              title: "The Holy One Born in You",
+              verseRef: "Luke 1:35",
+              verseText: "The holy one to be born will be called the Son of God.",
+              excerpt: paragraphs[0],
+              paragraphs: paragraphs
+            };
+            renderDevotional(liveDevo);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Live Utmost fetch fallback:', e);
+    }
+  }
+
+  function initDevotional() {
+    renderDevotional(DAILY_DEVOTIONALS[0]);
+    fetchUtmostDevotional();
 
     // Text-to-speech button
     const speakBtn = document.getElementById('speak-scripture-btn');
@@ -315,7 +340,7 @@
         window.speechSynthesis.cancel();
         speakBtn.textContent = '⏳ Preparing...';
         setTimeout(() => {
-          const utterance = new SpeechSynthesisUtterance(`${devo.verseText}. ${devo.verseRef}`);
+          const utterance = new SpeechSynthesisUtterance(`${activeDevotional.verseText}. ${activeDevotional.verseRef}`);
           utterance.rate = 0.95;
           utterance.onend = () => { speakBtn.textContent = '🔊 Listen'; };
           utterance.onerror = () => { speakBtn.textContent = '🔊 Listen'; };
@@ -332,13 +357,13 @@
 
     if (readBtn && modal) {
       readBtn.addEventListener('click', () => {
-        document.getElementById('modal-devo-title').textContent = devo.title;
-        document.getElementById('modal-devo-verse-ref').textContent = devo.verseRef;
-        document.getElementById('modal-devo-verse-text').textContent = `"${devo.verseText}"`;
+        document.getElementById('modal-devo-title').textContent = activeDevotional.title;
+        document.getElementById('modal-devo-verse-ref').textContent = activeDevotional.verseRef;
+        document.getElementById('modal-devo-verse-text').textContent = `"${activeDevotional.verseText}"`;
 
         const pBox = document.getElementById('modal-devo-paragraphs');
         if (pBox) {
-          pBox.innerHTML = devo.paragraphs.map(p => `<p>${p}</p>`).join('');
+          pBox.innerHTML = activeDevotional.paragraphs.map(p => `<p>${p}</p>`).join('');
         }
         modal.classList.add('active');
       });
@@ -1291,7 +1316,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v25') {
+          if (name !== 'daily-dashboard-v26') {
             caches.delete(name);
           }
         });
