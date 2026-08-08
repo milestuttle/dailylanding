@@ -345,18 +345,25 @@
         </div>
       `;
 
-      // Render Hourly Forecast (Next 12 Hours)
-      const currentHourIdx = new Date().getHours();
+      // Render Hourly Forecast (Next 12 Hours from current hour)
+      const nowHour = new Date().getHours();
+      const todayYMD = new Date().toISOString().split('T')[0];
+      let startIdx = data.hourly.time.findIndex(t => t.startsWith(todayYMD) && parseInt(t.split('T')[1].split(':')[0], 10) >= nowHour);
+      if (startIdx === -1) startIdx = 0;
+
       const hourlyItems = [];
-      for (let i = currentHourIdx; i < currentHourIdx + 12 && i < data.hourly.time.length; i++) {
-        const hTime = new Date(data.hourly.time[i]).toLocaleTimeString('en-US', { hour: 'numeric' });
+      for (let i = startIdx; i < startIdx + 12 && i < data.hourly.time.length; i++) {
+        const timeStr = data.hourly.time[i];
+        const hourNum = parseInt(timeStr.split('T')[1].split(':')[0], 10);
+        const displayHour = hourNum === 0 ? '12 AM' : hourNum === 12 ? '12 PM' : hourNum > 12 ? `${hourNum - 12} PM` : `${hourNum} AM`;
+
         const hTemp = Math.round(data.hourly.temperature_2m[i]);
         const hPrecip = data.hourly.precipitation_probability[i] || 0;
         const hIcon = decodeWmoCode(data.hourly.weathercode[i]).icon;
 
         hourlyItems.push(`
           <div class="hourly-card">
-            <span class="hourly-time">${hTime}</span>
+            <span class="hourly-time">${displayHour}</span>
             <span class="hourly-icon">${hIcon}</span>
             <span class="hourly-temp">${hTemp}°</span>
             <span class="hourly-precip">${hPrecip}%</span>
@@ -1517,7 +1524,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v35') {
+          if (name !== 'daily-dashboard-v36') {
             caches.delete(name);
           }
         });
