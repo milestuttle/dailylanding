@@ -32,11 +32,7 @@
       { id: 'h3', name: '30 Min Exercise', icon: '🏃', streak: 5, completedToday: false },
       { id: 'h4', name: 'Read 20 Mins', icon: '📚', streak: 12, completedToday: false }
     ],
-    events: [
-      { id: 'e1', title: 'Morning Devotional & Coffee', time: '07:30', category: 'devotion' },
-      { id: 'e2', title: 'Daily Planning & Priority Check', time: '09:00', category: 'personal' },
-      { id: 'e3', title: 'Team Sync & Focus Time', time: '10:30', category: 'meeting' }
-    ],
+    events: [],
     shortcuts: [
       { title: 'Utmost', url: 'https://utmost.org', icon: '📖' },
       { title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
@@ -401,6 +397,7 @@
 
     if (state.events && Array.isArray(state.events)) {
       state.events = state.events.filter(ev => {
+        if (ev.id === 'e1' || ev.id === 'e2' || ev.id === 'e3') return false;
         if (ev.id && ev.id.startsWith('ical-')) {
           return ev.eventDateYMD === todayYMD;
         }
@@ -1277,7 +1274,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v17') {
+          if (name !== 'daily-dashboard-v18') {
             caches.delete(name);
           }
         });
