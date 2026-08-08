@@ -157,9 +157,7 @@
               <div>
                 <div class="card-title-row">
                   <h2 class="card-title">My Utmost for His Highest</h2>
-                  <span class="header-count-badge" id="devo-status-badge">Daily Entry</span>
                 </div>
-                <span class="card-subtitle">Daily Devotional by Oswald Chambers</span>
               </div>
             </div>
             <div class="card-header-actions">
@@ -231,18 +229,17 @@
       <!-- COLUMN 2: NEWS, NOTES & LAUNCHER -->
       <section class="grid-col col-right">
         
-        <!-- QUICK LAUNCHER / BOOKMARKS -->
+        <!-- BOOKMARKS WIDGET -->
         <article class="widget-card glass-card launcher-card" id="widget-launcher">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg></span>
               <div class="card-title-row">
-                <h2 class="card-title">Quick Bookmarks</h2>
-                <span class="header-count-badge" id="shortcuts-count-badge">Shortcuts</span>
+                <h2 class="card-title">Bookmarks</h2>
               </div>
             </div>
             <div class="card-header-actions">
-              <button class="btn-text-sm" id="edit-shortcuts-btn">Edit Shortcuts</button>
+              <button class="btn-text-sm" id="edit-shortcuts-btn">Edit Bookmarks</button>
               <button class="btn-icon-sm widget-toggle-btn" data-widget="launcher" title="Toggle Bookmarks Collapse">▼</button>
             </div>
           </div>
@@ -251,17 +248,17 @@
           </div>
         </article>
 
-        <!-- NEWS & RSS AGGREGATOR WIDGET -->
+        <!-- NEWS FEED WIDGET -->
         <article class="widget-card glass-card news-card" id="widget-news">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8z"></path></svg></span>
               <div>
                 <div class="card-title-row">
-                  <h2 class="card-title">News & Interest Feed</h2>
+                  <h2 class="card-title">News Feed</h2>
                   <span class="header-count-badge" id="news-count-badge">4 Feeds</span>
                 </div>
-                <span class="card-subtitle" id="news-feed-name">Latest Highlights</span>
+                <span class="card-subtitle" id="news-feed-name">World Highlights</span>
               </div>
             </div>
             <div class="card-header-actions">
@@ -271,10 +268,10 @@
           </div>
 
           <div class="news-category-pills" id="news-category-pills">
-            <button class="pill-btn active" data-category="local">Local News</button>
-            <button class="pill-btn" data-category="world">World (NYT)</button>
+            <button class="pill-btn active" data-category="world">World (NYT)</button>
             <button class="pill-btn" data-category="national">National (NYT)</button>
             <button class="pill-btn" data-category="tech">Tech & Innovation</button>
+            <button class="pill-btn" data-category="local">Local News</button>
           </div>
 
           <div class="news-feed-list" id="news-feed-container">
@@ -317,9 +314,37 @@
 
   </div>
 
-  <!-- MODALS -->
+  <!-- WEATHER DETAILS EXTENDED MODAL -->
+  <div class="modal-overlay" id="weather-modal">
+    <div class="modal-card modal-lg glass-card">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="weather-modal-city">Weather Forecast Details</h2>
+          <span class="modal-subtitle" id="weather-modal-subtitle">Hourly & Daily Forecast</span>
+        </div>
+        <button class="modal-close-btn" id="close-weather-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="weather-modal-body">
+        <div class="loading-spinner-box">Loading detailed forecast...</div>
+      </div>
+    </div>
+  </div>
 
-  <!-- DEVOTIONAL READER MODAL -->
+  <!-- SCHEDULE QUICK SUMMARY MODAL -->
+  <div class="modal-overlay" id="schedule-summary-modal">
+    <div class="modal-card modal-md glass-card">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">Today's Schedule Summary</h2>
+          <span class="modal-subtitle" id="schedule-summary-date">Today</span>
+        </div>
+        <button class="modal-close-btn" id="close-schedule-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="schedule-summary-body">
+        <!-- Dynamic Schedule Summary -->
+      </div>
+    </div>
+  </div>
   <div class="modal-overlay" id="devotional-modal">
     <div class="modal-card modal-lg glass-card">
       <div class="modal-header">

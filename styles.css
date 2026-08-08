@@ -1658,6 +1658,119 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   color: var(--text-muted);
 }
 
+/* WEATHER & SCHEDULE MODAL EXTENSIONS */
+.weather-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.65rem;
+}
+
+.weather-stat-card {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.weather-stat-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.weather-stat-val {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+.hourly-forecast-row {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hourly-card {
+  flex: 0 0 72px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.hourly-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.hourly-temp {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.hourly-precip {
+  font-size: 0.65rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.daily-forecast-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.daily-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--card-border);
+}
+
+.daily-day {
+  font-weight: 600;
+  font-size: 0.88rem;
+  width: 100px;
+}
+
+.daily-temps {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.temp-max { color: var(--text-primary); }
+.temp-min { color: var(--text-muted); }
+
+.modal-section-title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
 /* FOOTER */
 .app-footer {
   text-align: center;
@@ -1684,6 +1797,35 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 @media (max-width: 768px) {
   body {
     padding: 0.75rem;
+  }
+
+  .semrush-top-nav {
+    padding: 0.4rem 0.65rem;
+    gap: 0.4rem;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  .nav-center-group {
+    max-width: 160px;
+  }
+
+  .cmd-text {
+    font-size: 0.72rem;
+  }
+
+  .cmd-kbd {
+    display: none;
+  }
+
+  .status-pulse-badge {
+    display: none;
+  }
+
+  .weather-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   /* PREVENT IOS SAFARI ZOOM ON INPUT FOCUS */

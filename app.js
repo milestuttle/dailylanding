@@ -209,7 +209,14 @@
   function initWeather() {
     const weatherCard = document.getElementById('weather-card');
     if (weatherCard) {
-      weatherCard.addEventListener('click', fetchWeather);
+      weatherCard.addEventListener('click', openWeatherModal);
+    }
+    const closeWeatherModal = document.getElementById('close-weather-modal');
+    if (closeWeatherModal) {
+      closeWeatherModal.addEventListener('click', () => {
+        const modal = document.getElementById('weather-modal');
+        if (modal) modal.classList.remove('active');
+      });
     }
     fetchWeather();
   }
@@ -262,10 +269,128 @@
         if (descEl) descEl.textContent = info.desc;
         if (locEl) locEl.textContent = cityName;
         if (iconEl) iconEl.innerHTML = info.icon;
+
+        // Store coords for modal view
+        state.lastLat = lat;
+        state.lastLon = lon;
+        state.lastCity = cityName;
       }
     } catch (e) {
       if (tempEl) tempEl.textContent = '--°F';
       if (descEl) descEl.textContent = 'Weather unavailable';
+    }
+  }
+
+  // --- WEATHER EXTENDED FORECAST MODAL ---
+  async function openWeatherModal() {
+    const modal = document.getElementById('weather-modal');
+    const modalBody = document.getElementById('weather-modal-body');
+    const modalCity = document.getElementById('weather-modal-city');
+    const modalSub = document.getElementById('weather-modal-subtitle');
+
+    if (!modal || !modalBody) return;
+    modal.classList.add('active');
+
+    const lat = state.lastLat || 39.7392;
+    const lon = state.lastLon || -104.9903;
+    const cityName = state.lastCity || 'Denver, CO';
+
+    if (modalCity) modalCity.textContent = `${cityName} Weather Details`;
+    modalBody.innerHTML = `<div class="loading-spinner-box">Fetching 7-day forecast & hourly metrics...</div>`;
+
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation_probability,weathercode&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&temperature_unit=fahrenheit`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data || !data.daily || !data.hourly) {
+        modalBody.innerHTML = `<div class="loading-spinner-box">Unable to load detailed forecast.</div>`;
+        return;
+      }
+
+      if (modalSub) modalSub.textContent = `Today: ${Math.round(data.daily.temperature_2m_max[0])}°F / ${Math.round(data.daily.temperature_2m_min[0])}°F • Precip ${data.daily.precipitation_probability_max[0]}%`;
+
+      const sunriseStr = data.daily.sunrise[0] ? new Date(data.daily.sunrise[0]).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '--';
+      const sunsetStr = data.daily.sunset[0] ? new Date(data.daily.sunset[0]).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '--';
+      const windSpeed = data.current_weather ? Math.round(data.current_weather.windspeed) : '--';
+      const precipMax = data.daily.precipitation_probability_max[0] || 0;
+
+      // Render 4 Stat Cards
+      const statsHtml = `
+        <div class="weather-stat-grid">
+          <div class="weather-stat-card">
+            <span class="weather-stat-label">Precipitation</span>
+            <span class="weather-stat-val">${precipMax}%</span>
+          </div>
+          <div class="weather-stat-card">
+            <span class="weather-stat-label">Wind Speed</span>
+            <span class="weather-stat-val">${windSpeed} mph</span>
+          </div>
+          <div class="weather-stat-card">
+            <span class="weather-stat-label">Sunrise</span>
+            <span class="weather-stat-val">${sunriseStr}</span>
+          </div>
+          <div class="weather-stat-card">
+            <span class="weather-stat-label">Sunset</span>
+            <span class="weather-stat-val">${sunsetStr}</span>
+          </div>
+        </div>
+      `;
+
+      // Render Hourly Forecast (Next 12 Hours)
+      const currentHourIdx = new Date().getHours();
+      const hourlyItems = [];
+      for (let i = currentHourIdx; i < currentHourIdx + 12 && i < data.hourly.time.length; i++) {
+        const hTime = new Date(data.hourly.time[i]).toLocaleTimeString('en-US', { hour: 'numeric' });
+        const hTemp = Math.round(data.hourly.temperature_2m[i]);
+        const hPrecip = data.hourly.precipitation_probability[i] || 0;
+        const hIcon = decodeWmoCode(data.hourly.weathercode[i]).icon;
+
+        hourlyItems.push(`
+          <div class="hourly-card">
+            <span class="hourly-time">${hTime}</span>
+            <span class="hourly-icon">${hIcon}</span>
+            <span class="hourly-temp">${hTemp}°</span>
+            <span class="hourly-precip">${hPrecip}%</span>
+          </div>
+        `);
+      }
+
+      const hourlyHtml = `
+        <div class="modal-section-title" style="margin-top: 1rem;">Hourly Forecast (Next 12 Hours)</div>
+        <div class="hourly-forecast-row">${hourlyItems.join('')}</div>
+      `;
+
+      // Render 7-Day Forecast List
+      const dailyRows = [];
+      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      for (let d = 0; d < data.daily.time.length && d < 7; d++) {
+        const dateObj = new Date(data.daily.time[d] + 'T00:00:00');
+        const dayName = d === 0 ? 'Today' : daysOfWeek[dateObj.getDay()];
+        const maxT = Math.round(data.daily.temperature_2m_max[d]);
+        const minT = Math.round(data.daily.temperature_2m_min[d]);
+        const dIcon = decodeWmoCode(data.daily.weathercode[d]).icon;
+
+        dailyRows.push(`
+          <div class="daily-row">
+            <span class="daily-day">${dayName}</span>
+            <span class="daily-icon">${dIcon}</span>
+            <div class="daily-temps">
+              <span class="temp-max">${maxT}°</span>
+              <span class="temp-min">${minT}°</span>
+            </div>
+          </div>
+        `);
+      }
+
+      const dailyHtml = `
+        <div class="modal-section-title" style="margin-top: 1rem;">7-Day Forecast</div>
+        <div class="daily-forecast-list">${dailyRows.join('')}</div>
+      `;
+
+      modalBody.innerHTML = statsHtml + hourlyHtml + dailyHtml;
+    } catch (e) {
+      modalBody.innerHTML = `<div class="loading-spinner-box">Error loading extended weather data.</div>`;
     }
   }
 
@@ -382,6 +507,62 @@
     }
 
     renderAgenda();
+
+    // Schedule Quick Summary Modal
+    const agendaHeader = document.querySelector('#widget-agenda .card-title-group');
+    const eventsKpiChip = document.querySelector('.events-kpi-chip');
+    if (agendaHeader) agendaHeader.addEventListener('click', openScheduleSummaryModal);
+    if (eventsKpiChip) eventsKpiChip.addEventListener('click', openScheduleSummaryModal);
+
+    const closeSchedModal = document.getElementById('close-schedule-modal');
+    if (closeSchedModal) {
+      closeSchedModal.addEventListener('click', () => {
+        const modal = document.getElementById('schedule-summary-modal');
+        if (modal) modal.classList.remove('active');
+      });
+    }
+  }
+
+  function openScheduleSummaryModal() {
+    const modal = document.getElementById('schedule-summary-modal');
+    const modalBody = document.getElementById('schedule-summary-body');
+    const modalDate = document.getElementById('schedule-summary-date');
+
+    if (!modal || !modalBody) return;
+    modal.classList.add('active');
+
+    const now = new Date();
+    if (modalDate) modalDate.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+    const totalEvents = state.events ? state.events.length : 0;
+    if (totalEvents === 0) {
+      modalBody.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem 1rem;">
+          <p style="font-size: 1rem; color: var(--text-secondary);">No events scheduled for today.</p>
+          <button class="btn btn-primary" style="margin-top: 1rem;" id="modal-add-event-btn">+ Add Event</button>
+        </div>
+      `;
+      const btn = document.getElementById('modal-add-event-btn');
+      if (btn) btn.addEventListener('click', () => { modal.classList.remove('active'); openAddEventModal(); });
+      return;
+    }
+
+    const eventsHtml = state.events.map(e => `
+      <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${e.time}</span>
+          <span class="tag ${e.category === 'work' ? 'tag-accent' : ''}" style="font-size: 0.62rem;">${e.category}</span>
+        </div>
+        <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
+        ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
+      </div>
+    `).join('');
+
+    modalBody.innerHTML = `
+      <div style="margin-bottom: 0.85rem; font-weight: 700; color: var(--text-primary);">Total Scheduled Events: ${totalEvents}</div>
+      ${eventsHtml}
+    `;
+  }
 
     // Modal controls
     const addBtn = document.getElementById('add-event-btn');
@@ -1030,11 +1211,22 @@
     const container = document.getElementById('shortcuts-container');
     if (!container) return;
 
-    const linkSvg = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+    const getShortcutIcon = (title, url) => {
+      const str = (title + ' ' + url).toLowerCase();
+      if (str.includes('nyt') || str.includes('times')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path></svg>`;
+      if (str.includes('esv') || str.includes('bible')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
+      if (str.includes('mail') || str.includes('gmail')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
+      if (str.includes('reddit')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>`;
+      if (str.includes('youtube')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="4" ry="4"></rect><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>`;
+      if (str.includes('news')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`;
+      if (str.includes('record') || str.includes('canon')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+      if (str.includes('facebook')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>`;
+      return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+    };
 
     container.innerHTML = state.shortcuts.map(s => `
       <a href="${s.url}" target="_blank" rel="noopener" class="shortcut-item">
-        <span class="shortcut-icon">${linkSvg}</span>
+        <span class="shortcut-icon">${getShortcutIcon(s.title || s.name, s.url)}</span>
         <span class="shortcut-label">${escapeHtml(s.title || s.name)}</span>
       </a>
     `).join('');
@@ -1058,13 +1250,13 @@
         refreshBtn.style.transition = 'transform 0.35s ease';
         const activePill = document.querySelector('.news-category-pills .pill-btn.active');
         setTimeout(() => {
-          fetchNews(activePill ? activePill.dataset.category : 'local');
+          fetchNews(activePill ? activePill.dataset.category : 'world');
           setTimeout(() => { refreshBtn.style.transform = 'none'; }, 400);
         }, 300);
       });
     }
 
-    fetchNews('local');
+    fetchNews('world');
   }
 
   function getCleanSourceTitle(feedTitle, defaultName) {
@@ -1318,7 +1510,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v31') {
+          if (name !== 'daily-dashboard-v32') {
             caches.delete(name);
           }
         });
