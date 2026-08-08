@@ -25,6 +25,45 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- MANAGEMATE NAVIGATION RAIL (DESKTOP: FIXED LEFT SIDEBAR / MOBILE: FLOATING BOTTOM DOCK) -->
+  <nav class="app-nav-rail" id="app-nav-rail" aria-label="Quick Navigation">
+    <div class="rail-brand" title="DailyDash Workspace">
+      <span class="rail-logo">⚡</span>
+    </div>
+    <div class="rail-links">
+      <button class="rail-btn active" data-target="top" title="Home / Overview">
+        <span class="rail-icon">🏠</span>
+        <span class="rail-label">Home</span>
+      </button>
+      <button class="rail-btn" data-target="widget-devotional" title="My Utmost Devotional">
+        <span class="rail-icon">📖</span>
+        <span class="rail-label">Devo</span>
+      </button>
+      <button class="rail-btn" data-target="widget-agenda" title="Schedule">
+        <span class="rail-icon">📅</span>
+        <span class="rail-label">Schedule</span>
+      </button>
+      <button class="rail-btn" data-target="widget-launcher" title="Bookmarks">
+        <span class="rail-icon">🔖</span>
+        <span class="rail-label">Bookmarks</span>
+      </button>
+      <button class="rail-btn" data-target="widget-news" title="News">
+        <span class="rail-icon">📰</span>
+        <span class="rail-label">News</span>
+      </button>
+      <button class="rail-btn" data-target="widget-scratchpad" title="Notes">
+        <span class="rail-icon">📝</span>
+        <span class="rail-label">Notes</span>
+      </button>
+    </div>
+    <div class="rail-footer">
+      <button class="rail-btn" id="rail-command-btn" title="Search (Cmd + K)">
+        <span class="rail-icon">🔍</span>
+        <span class="rail-label">Search</span>
+      </button>
+    </div>
+  </nav>
+
   <div class="app-container">
     
     <!-- SEMRUSH TOP BRAND NAVIGATION BAR -->
@@ -108,7 +147,7 @@
       <section class="grid-col col-left">
         
         <!-- DEVOTIONAL WIDGET: MY UTMOST FOR HIS HIGHEST -->
-        <article class="widget-card glass-card devotional-card">
+        <article class="widget-card glass-card devotional-card" id="widget-devotional">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon">📖</span>
@@ -154,7 +193,7 @@
         </article>
 
         <!-- CALENDAR & AGENDA WIDGET -->
-        <article class="widget-card glass-card agenda-card">
+        <article class="widget-card glass-card agenda-card" id="widget-agenda">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon">📅</span>
@@ -190,7 +229,7 @@
       <section class="grid-col col-right">
         
         <!-- QUICK LAUNCHER / BOOKMARKS -->
-        <article class="widget-card glass-card launcher-card">
+        <article class="widget-card glass-card launcher-card" id="widget-launcher">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon">🚀</span>
@@ -210,7 +249,7 @@
         </article>
 
         <!-- NEWS & RSS AGGREGATOR WIDGET -->
-        <article class="widget-card glass-card news-card">
+        <article class="widget-card glass-card news-card" id="widget-news">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon">📰</span>
@@ -241,7 +280,7 @@
         </article>
 
         <!-- IDEAS & SCRATCHPAD WIDGET -->
-        <article class="widget-card glass-card scratchpad-card">
+        <article class="widget-card glass-card scratchpad-card" id="widget-scratchpad">
           <div class="card-header">
             <div class="card-title-group">
               <span class="card-icon">💡</span>

@@ -122,6 +122,31 @@
   --input-focus: rgba(139, 92, 246, 0.6);
 }
 
+/* MANAGEMATE THEME OVERRIDES (Soft Slate & Royal Indigo #4F46E5) */
+[data-theme="managemate"] {
+  --bg-color: #f8fafc;
+  --bg-gradient: radial-gradient(circle at 10% 20%, #ffffff 0%, #f1f5f9 60%, #e2e8f0 100%);
+  --card-bg: #ffffff;
+  --card-border: rgba(226, 232, 240, 0.9);
+  --card-hover-border: rgba(79, 70, 229, 0.4);
+  --card-top-accent: transparent;
+  --card-shadow: none;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --primary-rgb: 79, 70, 229;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --accent: #6366f1;
+  --accent-gradient: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
+
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --input-focus: rgba(79, 70, 229, 0.6);
+}
+
 /* RESET & BASE */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -190,6 +215,165 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+/* MANAGEMATE NAVIGATION RAIL (DESKTOP FIXED LEFT SIDEBAR & MOBILE FLOATING BOTTOM DOCK) */
+.app-nav-rail {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  transition: var(--transition-normal);
+}
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.rail-logo {
+  width: 40px;
+  height: 40px;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-links {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rail-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+  position: relative;
+  padding: 0.4rem;
+}
+
+.rail-btn:hover {
+  color: var(--text-primary);
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
+.rail-btn.active {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.12);
+  font-weight: 700;
+}
+
+.rail-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.rail-label {
+  font-size: 0.58rem;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+/* DESKTOP NAV RAIL (FIXED LEFT SIDEBAR) */
+@media (min-width: 1024px) {
+  .app-nav-rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 72px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 0.5rem;
+    border-right: 1px solid var(--card-border);
+  }
+
+  .rail-links {
+    flex-direction: column;
+    width: 100%;
+    align-items: center;
+  }
+
+  .rail-btn {
+    width: 54px;
+    height: 52px;
+  }
+
+  .rail-btn.active::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 8px;
+    bottom: 8px;
+    width: 3.5px;
+    background: var(--primary);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .app-container {
+    margin-left: 80px;
+    max-width: calc(1440px - 80px);
+  }
+}
+
+/* MOBILE NAV RAIL (FLOATING BOTTOM DOCK) */
+@media (max-width: 1023px) {
+  .app-nav-rail {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 32px);
+    max-width: 440px;
+    height: 60px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 0.5rem;
+    border-radius: 30px;
+    box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.4);
+  }
+
+  .rail-brand, .rail-footer {
+    display: none !important;
+  }
+
+  .rail-links {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .rail-btn {
+    flex: 1;
+    height: 48px;
+  }
+
+  .app-container {
+    padding-bottom: 80px;
+  }
 }
 
 /* ==========================================================================

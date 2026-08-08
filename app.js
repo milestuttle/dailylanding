@@ -104,6 +104,7 @@
     initCommandPalette();
     initWidgetCollapse();
     initDensityToggle();
+    initNavRail();
     updateKpiStats();
     initPWA();
   });
@@ -143,7 +144,7 @@
     const themeBtn = document.getElementById('theme-toggle-btn');
     if (themeBtn) {
       themeBtn.addEventListener('click', () => {
-        const themes = ['dark', 'branch', 'emerald', 'violet', 'light'];
+        const themes = ['dark', 'managemate', 'branch', 'emerald', 'violet', 'light'];
         const current = state.theme || 'dark';
         const next = themes[(themes.indexOf(current) + 1) % themes.length];
         state.theme = next;
@@ -1316,7 +1317,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v27') {
+          if (name !== 'daily-dashboard-v28') {
             caches.delete(name);
           }
         });
@@ -1599,6 +1600,58 @@
         saveState();
       });
     }
+  }
+
+  function initNavRail() {
+    const railBtns = document.querySelectorAll('.rail-btn[data-target]');
+    const commandBtn = document.getElementById('rail-command-btn');
+
+    if (commandBtn) {
+      commandBtn.addEventListener('click', () => {
+        const cmdModal = document.getElementById('command-palette-modal');
+        if (cmdModal) {
+          cmdModal.classList.add('active');
+          const input = document.getElementById('command-palette-input');
+          if (input) { input.value = ''; input.focus(); }
+        }
+      });
+    }
+
+    railBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        if (targetId === 'top') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          const targetEl = document.getElementById(targetId);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+
+        railBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Update active rail link on scroll
+    window.addEventListener('scroll', () => {
+      const scrollPos = window.scrollY + 200;
+      const targets = ['widget-devotional', 'widget-agenda', 'widget-launcher', 'widget-news', 'widget-scratchpad'];
+
+      if (window.scrollY < 150) {
+        railBtns.forEach(b => b.classList.toggle('active', b.dataset.target === 'top'));
+        return;
+      }
+
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const el = document.getElementById(targets[i]);
+        if (el && el.offsetTop <= scrollPos) {
+          railBtns.forEach(b => b.classList.toggle('active', b.dataset.target === targets[i]));
+          break;
+        }
+      }
+    }, { passive: true });
   }
 
   // --- HELPERS ---
