@@ -143,7 +143,81 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+}
+
+/* ==========================================================================
+   SEMRUSH TOP BRAND NAVIGATION BAR
+   ========================================================================== */
+.semrush-top-nav {
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--primary);
+  border-radius: var(--radius-lg);
+}
+
+.nav-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand-logo-badge {
+  width: 32px;
+  height: 32px;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(255, 100, 45, 0.4);
+}
+
+.brand-text-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.brand-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+}
+
+.status-pulse-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--success);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--success);
 }
 
 /* ==========================================================================
@@ -330,7 +404,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   min-width: 0;
 }
 
-/* WIDGET CARD COMMON */
+/* WIDGET CARD COMMON (SEMRUSH DATA PANEL STRUCTURE) */
 .widget-card {
   padding: 1.5rem;
   display: flex;
@@ -342,6 +416,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   min-width: 0;
   box-sizing: border-box;
   overflow: hidden;
+  border-top: 3px solid rgba(255, 100, 45, 0.45);
 }
 
 .card-header {
@@ -363,13 +438,14 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 }
 
 .card-icon {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.06);
+  width: 38px;
+  height: 38px;
+  background: rgba(255, 100, 45, 0.12);
+  border: 1px solid rgba(255, 100, 45, 0.25);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
@@ -851,16 +927,18 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   padding: 0.85rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--card-border);
+  border-left: 3px solid transparent;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  transition: var(--transition-fast);
+  transition: border-color var(--transition-fast), transform var(--transition-fast), background var(--transition-fast);
 }
 
 .news-card-item:hover {
-  background: rgba(255, 255, 255, 0.07);
-  transform: translateY(-2px);
+  background: rgba(255, 100, 45, 0.06);
+  border-left-color: var(--primary);
+  transform: translateX(3px);
 }
 
 .news-item-title {
