@@ -149,7 +149,7 @@
     const themeBtn = document.getElementById('theme-toggle-btn');
     if (themeBtn) {
       themeBtn.addEventListener('click', () => {
-        const themes = ['dark', 'emerald', 'violet', 'light'];
+        const themes = ['dark', 'branch', 'emerald', 'violet', 'light'];
         const current = state.theme || 'dark';
         const next = themes[(themes.indexOf(current) + 1) % themes.length];
         state.theme = next;
@@ -1274,7 +1274,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v18') {
+          if (name !== 'daily-dashboard-v19') {
             caches.delete(name);
           }
         });
@@ -1403,7 +1403,7 @@
           }
         },
         {
-          title: '🌙 Cycle Color Theme (Fire / Emerald / Violet / Light)',
+          title: '🌿 Cycle Color Theme (Fire / Branch Linen / Emerald / Violet / Light)',
           cat: 'Action',
           action: () => {
             closePalette();

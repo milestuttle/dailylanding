@@ -63,6 +63,31 @@
   --input-border: rgba(203, 213, 225, 0.9);
 }
 
+/* BRANCH FURNITURE THEME OVERRIDES (Deep Evergreen & Warm Linen Cream) */
+[data-theme="branch"] {
+  --bg-color: #f3eeea;
+  --bg-gradient: radial-gradient(circle at 10% 20%, #f8f5f2 0%, #f3eeea 60%, #e8e1db 100%);
+  --card-bg: rgba(255, 255, 255, 0.92);
+  --card-border: rgba(49, 68, 56, 0.16);
+  --card-hover-border: rgba(49, 68, 56, 0.45);
+  --card-top-accent: rgba(49, 68, 56, 0.35);
+  --card-shadow: 0 10px 30px -5px rgba(49, 68, 56, 0.12), 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  --text-primary: #1f2c24;
+  --text-secondary: #4e5d53;
+  --text-muted: #7a8c80;
+
+  --primary-rgb: 49, 68, 56;
+  --primary: #314438;
+  --primary-hover: #223128;
+  --accent: #425a4c;
+  --accent-gradient: linear-gradient(135deg, #314438 0%, #425a4c 60%, #223128 100%);
+
+  --input-bg: rgba(255, 255, 255, 0.95);
+  --input-border: rgba(49, 68, 56, 0.22);
+  --input-focus: rgba(49, 68, 56, 0.6);
+}
+
 /* CYBER EMERALD THEME OVERRIDES (SEMrush Analytics & Emerald) */
 [data-theme="emerald"] {
   --bg-color: #09141d;
