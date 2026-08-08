@@ -274,7 +274,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(255, 100, 45, 0.4);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.4);
 }
 
 .brand-text-wrap {
@@ -515,7 +515,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   min-width: 0;
   box-sizing: border-box;
   overflow: hidden;
-  border-top: 1.5px solid var(--card-top-accent, rgba(255, 100, 45, 0.25));
+  border-top: 1.5px solid var(--card-top-accent, rgba(var(--primary-rgb), 0.25));
   border-radius: var(--radius-lg);
 }
 
@@ -544,8 +544,8 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: rgba(255, 100, 45, 0.12);
-  border: 1px solid rgba(255, 100, 45, 0.25);
+  background: rgba(var(--primary-rgb), 0.12);
+  border: 1px solid rgba(var(--primary-rgb), 0.25);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
@@ -564,9 +564,9 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   letter-spacing: 0.05em;
   padding: 0.12rem 0.45rem;
   border-radius: 3px;
-  background: rgba(255, 100, 45, 0.12);
+  background: rgba(var(--primary-rgb), 0.12);
   color: var(--primary);
-  border: 1px solid rgba(255, 100, 45, 0.25);
+  border: 1px solid rgba(var(--primary-rgb), 0.25);
   white-space: nowrap;
 }
 
@@ -1048,7 +1048,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 }
 
 .news-card-item:hover {
-  background: rgba(255, 100, 45, 0.06);
+  background: rgba(var(--primary-rgb), 0.06);
   border-left-color: var(--primary);
   transform: translateX(3px);
 }
@@ -1074,8 +1074,8 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 }
 
 .news-source-badge {
-  background: rgba(255, 100, 45, 0.14);
-  color: #ff7a45;
+  background: rgba(var(--primary-rgb), 0.14);
+  color: var(--primary);
   padding: 0.18rem 0.55rem;
   border-radius: 4px;
   font-weight: 700;
@@ -1171,12 +1171,12 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   background: var(--accent-gradient);
   color: #fff;
   font-weight: 700;
-  box-shadow: 0 4px 14px rgba(255, 100, 45, 0.3);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb), 0.3);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #e04812 0%, #ff642d 100%);
-  box-shadow: 0 6px 20px rgba(255, 100, 45, 0.45);
+  background: var(--primary-hover);
+  box-shadow: 0 6px 20px rgba(var(--primary-rgb), 0.45);
 }
 
 .btn-accent {
@@ -1619,9 +1619,9 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
 }
 
 .command-item:hover, .command-item.selected {
-  background: rgba(255, 100, 45, 0.15);
-  border-color: rgba(255, 100, 45, 0.3);
-  color: #fff;
+  background: rgba(var(--primary-rgb), 0.15);
+  border-color: rgba(var(--primary-rgb), 0.3);
+  color: var(--text-primary);
 }
 
 .command-item-title {
