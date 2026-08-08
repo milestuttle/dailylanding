@@ -1667,10 +1667,11 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.65rem;
+  flex-shrink: 0;
 }
 
 .weather-stat-card {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.08);
   padding: 0.75rem 0.85rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--card-border);
@@ -1697,23 +1698,27 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   display: flex;
   gap: 0.65rem;
   overflow-x: auto;
+  overflow-y: hidden;
   padding: 0.4rem 0 0.75rem 0;
+  flex-shrink: 0;
+  min-height: 116px;
   -webkit-overflow-scrolling: touch;
 }
 
 .hourly-card {
   flex: 0 0 76px;
   min-width: 76px;
-  min-height: 98px;
+  height: 104px;
+  min-height: 104px;
+  flex-shrink: 0;
   background: rgba(0, 0, 0, 0.08);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-md);
-  padding: 0.65rem 0.4rem;
+  padding: 0.6rem 0.4rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 0.3rem;
   text-align: center;
 }
 
@@ -1754,6 +1759,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  flex-shrink: 0;
 }
 
 .daily-row {
@@ -1761,7 +1767,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   align-items: center;
   justify-content: space-between;
   padding: 0.65rem 0.9rem;
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-md);
   border: 1px solid var(--card-border);
 }
@@ -1791,6 +1797,7 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.4rem;
+  flex-shrink: 0;
 }
 
 /* FOOTER */
