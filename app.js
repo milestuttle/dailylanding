@@ -270,13 +270,12 @@
   }
 
   function decodeWmoCode(code) {
-    if (code === 0) return { desc: 'Clear sky', icon: '☀️' };
-    if (code <= 3) return { desc: 'Partly cloudy', icon: '⛅' };
-    if (code <= 48) return { desc: 'Foggy', icon: '🌫️' };
-    if (code <= 67) return { desc: 'Rainy', icon: '🌧️' };
-    if (code <= 77) return { desc: 'Snowy', icon: '❄️' };
-    if (code <= 82) return { desc: 'Showers', icon: '🌦️' };
-    return { desc: 'Thunderstorm', icon: '⛈️' };
+    if (code === 0) return { desc: 'Clear sky', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>' };
+    if (code <= 3) return { desc: 'Partly cloudy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>' };
+    if (code <= 48) return { desc: 'Foggy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="8" x2="19" y2="8"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="5" y1="16" x2="19" y2="16"></line></svg>' };
+    if (code <= 67) return { desc: 'Rainy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"></line><line x1="8" y1="13" x2="8" y2="21"></line><line x1="12" y1="15" x2="12" y2="23"></line><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path></svg>' };
+    if (code <= 77) return { desc: 'Snowy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"></path><line x1="8" y1="16" x2="8.01" y2="16"></line><line x1="8" y1="20" x2="8.01" y2="20"></line><line x1="12" y1="18" x2="12.01" y2="18"></line><line x1="12" y1="22" x2="12.01" y2="22"></line><line x1="16" y1="16" x2="16.01" y2="16"></line><line x1="16" y1="20" x2="16.01" y2="20"></line></svg>' };
+    return { desc: 'Showers', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"></line><line x1="8" y1="13" x2="8" y2="21"></line><line x1="12" y1="15" x2="12" y2="23"></line><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path></svg>' };
   }
 
   let activeDevotional = DAILY_DEVOTIONALS[0];
@@ -1031,10 +1030,12 @@
     const container = document.getElementById('shortcuts-container');
     if (!container) return;
 
+    const linkSvg = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+
     container.innerHTML = state.shortcuts.map(s => `
       <a href="${s.url}" target="_blank" rel="noopener" class="shortcut-item">
-        <span class="shortcut-icon">${s.icon}</span>
-        <span class="shortcut-label">${escapeHtml(s.title)}</span>
+        <span class="shortcut-icon">${linkSvg}</span>
+        <span class="shortcut-label">${escapeHtml(s.title || s.name)}</span>
       </a>
     `).join('');
   }
@@ -1317,7 +1318,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v28') {
+          if (name !== 'daily-dashboard-v29') {
             caches.delete(name);
           }
         });

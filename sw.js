@@ -1,4 +1,4 @@
-const CACHE_NAME = 'daily-dashboard-v28';
+const CACHE_NAME = 'daily-dashboard-v29';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
