@@ -393,6 +393,23 @@
       syncBtn.addEventListener('click', fetchIcalFeed);
     }
 
+    // Purge outdated iCal events from previous days stored in localStorage
+    const now = new Date();
+    const todayYMD = now.getFullYear().toString() + 
+                     String(now.getMonth() + 1).padStart(2, '0') + 
+                     String(now.getDate()).padStart(2, '0');
+
+    if (state.events && Array.isArray(state.events)) {
+      state.events = state.events.filter(ev => {
+        if (ev.id && ev.id.startsWith('ical-')) {
+          return ev.eventDateYMD === todayYMD;
+        }
+        return true;
+      });
+      saveState();
+    }
+    renderAgenda();
+
     if ((state.icalUrls && state.icalUrls.length > 0) || state.icalUrl) {
       fetchIcalFeed();
     }
@@ -433,10 +450,11 @@
   }
 
   async function fetchProxyContent(url) {
+    const timeParam = `&_t=${Date.now()}`;
     const proxies = [
       u => `https://proxy.cors.sh/${u}`,
       u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}${timeParam}`
     ];
 
     for (const proxyFn of proxies) {
@@ -591,6 +609,7 @@
                   id: 'ical-' + Math.random().toString(36).substring(2, 9),
                   title,
                   time,
+                  eventDateYMD: todayYMD,
                   category: feed.category || (title.toLowerCase().includes('meeting') ? 'meeting' : 'work')
                 });
               }
@@ -601,11 +620,13 @@
         }
       }));
 
+      allEvents.sort((a, b) => a.time.localeCompare(b.time));
+      const manualEvents = (state.events || []).filter(e => !e.id.startsWith('ical-'));
+      state.events = [...manualEvents, ...allEvents].sort((a, b) => a.time.localeCompare(b.time));
+      saveState();
+      renderAgenda();
+
       if (allEvents.length > 0) {
-        allEvents.sort((a, b) => a.time.localeCompare(b.time));
-        state.events = allEvents;
-        saveState();
-        renderAgenda();
         if (statusEl) statusEl.textContent = `✅ Synced ${allEvents.length} Work & Personal events`;
       } else {
         if (statusEl) statusEl.textContent = '✅ Synced Work & Personal Calendars (No events today)';
@@ -1256,7 +1277,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v16') {
+          if (name !== 'daily-dashboard-v17') {
             caches.delete(name);
           }
         });
