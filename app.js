@@ -139,20 +139,33 @@
   }
 
   // --- THEME ENGINE ---
+  const THEME_LIST = ['dark', 'managemate', 'branch', 'emerald', 'violet', 'light'];
+
+  function applyTheme(themeName) {
+    const validTheme = THEME_LIST.includes(themeName) ? themeName : 'dark';
+    state.theme = validTheme;
+    document.documentElement.setAttribute('data-theme', validTheme);
+    saveState();
+  }
+
+  function cycleTheme() {
+    const current = state.theme || 'dark';
+    let idx = THEME_LIST.indexOf(current);
+    if (idx === -1) idx = 0;
+    const nextTheme = THEME_LIST[(idx + 1) % THEME_LIST.length];
+    applyTheme(nextTheme);
+  }
+
   function initTheme() {
-    document.documentElement.setAttribute('data-theme', state.theme || 'dark');
-    const themeTriggers = document.querySelectorAll('.theme-toggle-trigger, #theme-toggle-btn');
-    themeTriggers.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    applyTheme(state.theme || 'dark');
+
+    document.addEventListener('click', (e) => {
+      const trigger = e.target.closest('.theme-toggle-trigger, #theme-toggle-btn, [title*="Toggle Theme"]');
+      if (trigger) {
         e.preventDefault();
         e.stopPropagation();
-        const themes = ['dark', 'managemate', 'branch', 'emerald', 'violet', 'light'];
-        const current = state.theme || 'dark';
-        const next = themes[(themes.indexOf(current) + 1) % themes.length];
-        state.theme = next;
-        document.documentElement.setAttribute('data-theme', next);
-        saveState();
-      });
+        cycleTheme();
+      }
     });
 
     const focusBtn = document.getElementById('focus-mode-btn');
@@ -1512,7 +1525,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v33') {
+          if (name !== 'daily-dashboard-v34') {
             caches.delete(name);
           }
         });
