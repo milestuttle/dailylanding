@@ -242,28 +242,21 @@
     const locEl = document.getElementById('weather-location');
     const iconEl = document.getElementById('weather-icon');
 
-    if (state.weatherCity) {
-      // Manual city search via Open-Meteo Geocoding
-      try {
-        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(state.weatherCity)}&count=1`);
-        const geoData = await geoRes.json();
-        if (geoData.results && geoData.results.length > 0) {
-          const loc = geoData.results[0];
-          await getWeatherCoords(loc.latitude, loc.longitude, loc.name);
-          return;
-        }
-      } catch (e) { console.warn('Geo search error:', e); }
-    }
+    const rawCity = state.weatherCity || 'Canon City';
+    const searchCity = rawCity.split(',')[0].trim();
 
-    // Geolocation API fallback
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => getWeatherCoords(pos.coords.latitude, pos.coords.longitude, 'Current Location'),
-        () => getWeatherCoords(39.7392, -104.9903, 'Denver, CO') // Fallback city
-      );
-    } else {
-      getWeatherCoords(39.7392, -104.9903, 'Denver, CO');
-    }
+    try {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchCity)}&count=1`);
+      const geoData = await geoRes.json();
+      if (geoData && geoData.results && geoData.results.length > 0) {
+        const loc = geoData.results[0];
+        await getWeatherCoords(loc.latitude, loc.longitude, loc.name);
+        return;
+      }
+    } catch (e) { console.warn('Geo search error:', e); }
+
+    // Instant fallback to Canon City, CO
+    getWeatherCoords(38.4410, -105.2425, 'Cañon City, CO');
   }
 
   async function getWeatherCoords(lat, lon, cityName) {
@@ -536,48 +529,6 @@
         if (modal) modal.classList.remove('active');
       });
     }
-  }
-
-  function openScheduleSummaryModal() {
-    const modal = document.getElementById('schedule-summary-modal');
-    const modalBody = document.getElementById('schedule-summary-body');
-    const modalDate = document.getElementById('schedule-summary-date');
-
-    if (!modal || !modalBody) return;
-    modal.classList.add('active');
-
-    const now = new Date();
-    if (modalDate) modalDate.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
-    const totalEvents = state.events ? state.events.length : 0;
-    if (totalEvents === 0) {
-      modalBody.innerHTML = `
-        <div style="text-align: center; padding: 1.5rem 1rem;">
-          <p style="font-size: 1rem; color: var(--text-secondary);">No events scheduled for today.</p>
-          <button class="btn btn-primary" style="margin-top: 1rem;" id="modal-add-event-btn">+ Add Event</button>
-        </div>
-      `;
-      const btn = document.getElementById('modal-add-event-btn');
-      if (btn) btn.addEventListener('click', () => { modal.classList.remove('active'); openAddEventModal(); });
-      return;
-    }
-
-    const eventsHtml = state.events.map(e => `
-      <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${e.time}</span>
-          <span class="tag ${e.category === 'work' ? 'tag-accent' : ''}" style="font-size: 0.62rem;">${e.category}</span>
-        </div>
-        <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
-        ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
-      </div>
-    `).join('');
-
-    modalBody.innerHTML = `
-      <div style="margin-bottom: 0.85rem; font-weight: 700; color: var(--text-primary);">Total Scheduled Events: ${totalEvents}</div>
-      ${eventsHtml}
-    `;
-  }
 
     // Modal controls
     const addBtn = document.getElementById('add-event-btn');
@@ -635,6 +586,47 @@
     if ((state.icalUrls && state.icalUrls.length > 0) || state.icalUrl) {
       fetchIcalFeed();
     }
+  }
+
+  function openScheduleSummaryModal() {
+    const modal = document.getElementById('schedule-summary-modal');
+    const modalBody = document.getElementById('schedule-summary-body');
+    const modalDate = document.getElementById('schedule-summary-date');
+
+    if (!modal || !modalBody) return;
+    modal.classList.add('active');
+
+    const now = new Date();
+    if (modalDate) modalDate.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+    const totalEvents = state.events ? state.events.length : 0;
+    if (totalEvents === 0) {
+      modalBody.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem 1rem;">
+          <p style="font-size: 1rem; color: var(--text-secondary);">No events scheduled for today.</p>
+          <button class="btn btn-primary" style="margin-top: 1rem;" id="modal-add-event-btn">+ Add Event</button>
+        </div>
+      `;
+      const btn = document.getElementById('modal-add-event-btn');
+      if (btn) btn.addEventListener('click', () => { modal.classList.remove('active'); openAddEventModal(); });
+      return;
+    }
+
+    const eventsHtml = state.events.map(e => `
+      <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${e.time}</span>
+          <span class="tag ${e.category === 'work' ? 'tag-accent' : ''}" style="font-size: 0.62rem;">${e.category}</span>
+        </div>
+        <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
+        ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
+      </div>
+    `).join('');
+
+    modalBody.innerHTML = `
+      <div style="margin-bottom: 0.85rem; font-weight: 700; color: var(--text-primary);">Total Scheduled Events: ${totalEvents}</div>
+      ${eventsHtml}
+    `;
   }
 
   function renderAgenda() {
@@ -1525,7 +1517,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v34') {
+          if (name !== 'daily-dashboard-v35') {
             caches.delete(name);
           }
         });
