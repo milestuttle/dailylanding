@@ -34,13 +34,14 @@
     ],
     events: [],
     shortcuts: [
-      { title: 'Utmost', url: 'https://utmost.org', icon: '📖' },
-      { title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
-      { title: 'Calendar', url: 'https://calendar.google.com', icon: '📅' },
-      { title: 'Drive', url: 'https://drive.google.com', icon: '📁' },
-      { title: 'GitHub', url: 'https://github.com', icon: '🐙' },
-      { title: 'Bible', url: 'https://www.biblegateway.com', icon: '✝️' },
-      { title: 'News', url: 'https://news.google.com', icon: '📰' }
+      { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
+      { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
+      { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
+      { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
+      { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
+      { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
+      { name: 'Cañon City Daily Record', title: 'Cañon City Daily Record', url: 'https://www.canoncitydailyrecord.com', icon: '📍' },
+      { name: 'Facebook', title: 'Facebook', url: 'https://www.facebook.com', icon: '👥' }
     ]
   };
 
@@ -969,6 +970,17 @@
 
   // --- SHORTCUTS LAUNCHER ---
   function initShortcuts() {
+    state.shortcuts = [
+      { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
+      { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
+      { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
+      { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
+      { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
+      { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
+      { name: 'Cañon City Daily Record', title: 'Cañon City Daily Record', url: 'https://www.canoncitydailyrecord.com', icon: '📍' },
+      { name: 'Facebook', title: 'Facebook', url: 'https://www.facebook.com', icon: '👥' }
+    ];
+    saveState();
     renderShortcuts();
 
     const editBtn = document.getElementById('edit-shortcuts-btn');
@@ -1274,7 +1286,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v20') {
+          if (name !== 'daily-dashboard-v21') {
             caches.delete(name);
           }
         });
