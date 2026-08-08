@@ -114,6 +114,7 @@
     initScratchpad();
     initGratitude();
     initSettingsModal();
+    initCommandPalette();
     initPWA();
   });
 
@@ -400,6 +401,11 @@
   function renderAgenda() {
     const listEl = document.getElementById('agenda-events-list');
     if (!listEl) return;
+
+    const countBadge = document.getElementById('agenda-count-badge');
+    if (countBadge) {
+      countBadge.textContent = `${state.events ? state.events.length : 0} Events`;
+    }
 
     if (!state.events || state.events.length === 0) {
       listEl.innerHTML = `<div class="loading-spinner-box">No events scheduled for today. Click "+ Add Event" to get started.</div>`;
@@ -1200,7 +1206,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v13') {
+          if (name !== 'daily-dashboard-v14') {
             caches.delete(name);
           }
         });
@@ -1213,6 +1219,220 @@
         }
       });
       navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW error:', err));
+    }
+  }
+
+  // --- COMMAND PALETTE ENGINE (PROPOSAL 1) ---
+  let commandItems = [];
+  let selectedIndex = 0;
+
+  function initCommandPalette() {
+    const modal = document.getElementById('command-palette-modal');
+    const input = document.getElementById('command-palette-input');
+    const resultsContainer = document.getElementById('command-palette-results');
+    const triggerBtn = document.getElementById('command-palette-btn');
+
+    if (!modal || !input || !resultsContainer) return;
+
+    function openPalette() {
+      buildCommandsList();
+      renderCommandResults(input.value);
+      modal.classList.add('active');
+      input.value = '';
+      selectedIndex = 0;
+      setTimeout(() => input.focus(), 100);
+    }
+
+    function closePalette() {
+      modal.classList.remove('active');
+    }
+
+    if (triggerBtn) {
+      triggerBtn.addEventListener('click', openPalette);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (modal.classList.contains('active')) {
+          closePalette();
+        } else {
+          openPalette();
+        }
+      }
+      if (e.key === 'Escape' && modal.classList.contains('active')) {
+        closePalette();
+      }
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closePalette();
+    });
+
+    input.addEventListener('input', () => {
+      selectedIndex = 0;
+      renderCommandResults(input.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const items = resultsContainer.querySelectorAll('.command-item');
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % items.length;
+        updateSelectedCommandItem(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+        updateSelectedCommandItem(items);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (items[selectedIndex]) {
+          items[selectedIndex].click();
+        }
+      }
+    });
+
+    function updateSelectedCommandItem(items) {
+      items.forEach((el, idx) => {
+        if (idx === selectedIndex) {
+          el.classList.add('selected');
+          el.scrollIntoView({ block: 'nearest' });
+        } else {
+          el.classList.remove('selected');
+        }
+      });
+    }
+
+    function buildCommandsList() {
+      commandItems = [
+        {
+          title: '🔄 Sync Calendars (Work & Personal)',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('refresh-ical-btn');
+            if (btn) btn.click();
+          }
+        },
+        {
+          title: '🔊 Listen to Daily Scripture',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('speak-scripture-btn');
+            if (btn) btn.click();
+          }
+        },
+        {
+          title: '📖 Read Full Devotional Entry',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('read-full-devotional-btn');
+            if (btn) btn.click();
+          }
+        },
+        {
+          title: '🌙 Cycle Color Theme (Fire / Emerald / Violet / Light)',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('theme-toggle-btn');
+            if (btn) btn.click();
+          }
+        },
+        {
+          title: '📋 Copy Scratchpad Notes',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('copy-scratch-btn');
+            if (btn) btn.click();
+          }
+        },
+        {
+          title: '➕ Add Calendar Event',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('add-event-btn');
+            if (btn) btn.click();
+          }
+        },
+        {
+          title: '⚙️ Dashboard Settings & iCal Feeds',
+          cat: 'Action',
+          action: () => {
+            closePalette();
+            const btn = document.getElementById('settings-open-btn');
+            if (btn) btn.click();
+          }
+        }
+      ];
+
+      // Add Bookmarks
+      const countBadge = document.getElementById('shortcuts-count-badge');
+      if (countBadge) {
+        countBadge.textContent = `${state.shortcuts ? state.shortcuts.length : 0} Links`;
+      }
+
+      if (state.shortcuts && state.shortcuts.length > 0) {
+        state.shortcuts.forEach(s => {
+          commandItems.push({
+            title: `🚀 Open ${s.name}`,
+            url: s.url,
+            cat: 'Bookmark',
+            action: () => {
+              closePalette();
+              window.open(s.url, '_blank');
+            }
+          });
+        });
+      }
+
+      // Add News Items currently in DOM
+      const newsLinks = document.querySelectorAll('.news-item-title');
+      newsLinks.forEach(link => {
+        commandItems.push({
+          title: `📰 ${link.textContent.trim()}`,
+          url: link.href,
+          cat: 'News',
+          action: () => {
+            closePalette();
+            window.open(link.href, '_blank');
+          }
+        });
+      });
+    }
+
+    function renderCommandResults(query) {
+      const q = (query || '').toLowerCase().trim();
+      const filtered = q
+        ? commandItems.filter(item => item.title.toLowerCase().includes(q) || item.cat.toLowerCase().includes(q))
+        : commandItems;
+
+      if (filtered.length === 0) {
+        resultsContainer.innerHTML = `<div class="loading-spinner-box">No matching commands or links found.</div>`;
+        return;
+      }
+
+      resultsContainer.innerHTML = filtered.map((item, idx) => `
+        <div class="command-item ${idx === selectedIndex ? 'selected' : ''}" data-idx="${idx}">
+          <span class="command-item-title">${escapeHtml(item.title)}</span>
+          <span class="command-item-cat">${escapeHtml(item.cat)}</span>
+        </div>
+      `).join('');
+
+      const itemEls = resultsContainer.querySelectorAll('.command-item');
+      itemEls.forEach((el, idx) => {
+        el.addEventListener('click', () => {
+          if (filtered[idx] && filtered[idx].action) {
+            filtered[idx].action();
+          }
+        });
+      });
     }
   }
 
