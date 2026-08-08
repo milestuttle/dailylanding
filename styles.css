@@ -726,6 +726,10 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   transition: var(--transition-normal);
 }
 
+.icon-btn svg, .theme-toggle-trigger svg {
+  pointer-events: none;
+}
+
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.15);
   border-color: var(--primary);

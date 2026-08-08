@@ -141,9 +141,11 @@
   // --- THEME ENGINE ---
   function initTheme() {
     document.documentElement.setAttribute('data-theme', state.theme || 'dark');
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    if (themeBtn) {
-      themeBtn.addEventListener('click', () => {
+    const themeTriggers = document.querySelectorAll('.theme-toggle-trigger, #theme-toggle-btn');
+    themeTriggers.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const themes = ['dark', 'managemate', 'branch', 'emerald', 'violet', 'light'];
         const current = state.theme || 'dark';
         const next = themes[(themes.indexOf(current) + 1) % themes.length];
@@ -151,7 +153,7 @@
         document.documentElement.setAttribute('data-theme', next);
         saveState();
       });
-    }
+    });
 
     const focusBtn = document.getElementById('focus-mode-btn');
     if (focusBtn) {
@@ -1510,7 +1512,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v32') {
+          if (name !== 'daily-dashboard-v33') {
             caches.delete(name);
           }
         });
