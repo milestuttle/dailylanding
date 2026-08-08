@@ -261,7 +261,7 @@
         if (tempEl) tempEl.textContent = `${temp}°F`;
         if (descEl) descEl.textContent = info.desc;
         if (locEl) locEl.textContent = cityName;
-        if (iconEl) iconEl.textContent = info.icon;
+        if (iconEl) iconEl.innerHTML = info.icon;
       }
     } catch (e) {
       if (tempEl) tempEl.textContent = '--°F';
@@ -1318,7 +1318,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v29') {
+          if (name !== 'daily-dashboard-v30') {
             caches.delete(name);
           }
         });
