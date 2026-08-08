@@ -1524,7 +1524,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v38') {
+          if (name !== 'daily-dashboard-v39') {
             caches.delete(name);
           }
         });

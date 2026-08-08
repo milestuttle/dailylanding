@@ -1851,23 +1851,28 @@ button, a, input, select, textarea, .pill-btn, .tab-btn, .shortcut-card, .news-c
   }
 
   .nav-center-group {
-    max-width: 160px;
+    max-width: 100%;
+    flex: 1;
   }
 
   .cmd-text {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 
   .cmd-kbd {
     display: none;
   }
 
-  .status-pulse-badge {
-    display: none;
-  }
-
   .weather-stat-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .app-footer {
+    padding-bottom: 95px !important;
+  }
+
+  .status-pulse-badge {
+    display: inline-flex !important;
   }
 
   /* PREVENT IOS SAFARI ZOOM ON INPUT FOCUS */
