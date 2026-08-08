@@ -462,23 +462,67 @@
     return null;
   }
 
-  function isEventOnDate(block, todayYMD, now) {
-    const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?/);
+  function parseIcalDate(rawDate, rawTime, isUtc) {
+    if (!rawDate || rawDate.length < 8) return null;
+    const year = parseInt(rawDate.substring(0, 4), 10);
+    const month = parseInt(rawDate.substring(4, 6), 10) - 1;
+    const day = parseInt(rawDate.substring(6, 8), 10);
+
+    const timeStr = rawTime || '000000';
+    const hour = parseInt(timeStr.substring(0, 2), 10);
+    const min = parseInt(timeStr.substring(2, 4), 10);
+    const sec = parseInt(timeStr.substring(4, 6), 10);
+
+    if (isUtc) {
+      return new Date(Date.UTC(year, month, day, hour, min, sec));
+    }
+    return new Date(year, month, day, hour, min, sec);
+  }
+
+  function isSameLocalDate(d1, d2) {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  }
+
+  function isEventOnDate(block, now) {
+    const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?(Z)?/);
     if (!dtstartMatch) return false;
 
-    const startDate = dtstartMatch[1];
-    if (startDate === todayYMD) return true;
+    const isUtc = block.includes('Z') || dtstartMatch[3] === 'Z';
+    const startDateObj = parseIcalDate(dtstartMatch[1], dtstartMatch[2], isUtc);
+    if (!startDateObj) return false;
 
-    // Check Recurrence Rule (RRULE)
-    if (startDate < todayYMD) {
+    // Check if the event occurs on TODAY in local time
+    if (isSameLocalDate(startDateObj, now)) return true;
+
+    // If event start date in local time is in the past (before today's local date):
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const eventDayStart = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+
+    if (eventDayStart < todayStart) {
       const rruleMatch = block.match(/RRULE:(.*)/);
       if (!rruleMatch) return false;
 
       const rrule = rruleMatch[1];
 
       // Check UNTIL date if present
-      const untilMatch = rrule.match(/UNTIL=(\d{8})/);
-      if (untilMatch && untilMatch[1] < todayYMD) return false;
+      const untilMatch = rrule.match(/UNTIL=(\d{8})(?:T(\d{6}))?(Z)?/);
+      if (untilMatch) {
+        const untilDateObj = parseIcalDate(untilMatch[1], untilMatch[2], block.includes('Z'));
+        if (untilDateObj && untilDateObj < todayStart) return false;
+      }
+
+      // Check EXDATE (excluded dates)
+      const exdateMatches = block.match(/EXDATE(?:;[^:]*)?:(\d{8})/g);
+      if (exdateMatches) {
+        const todayYMD = now.getFullYear().toString() +
+                         String(now.getMonth() + 1).padStart(2, '0') +
+                         String(now.getDate()).padStart(2, '0');
+        for (let ex of exdateMatches) {
+          if (ex.includes(todayYMD)) return false;
+        }
+      }
 
       if (rrule.includes('FREQ=DAILY')) return true;
 
@@ -491,14 +535,11 @@
           const days = bydayMatch[1].split(',');
           if (days.some(d => d.includes(todayDayCode))) return true;
         } else {
-          const startYear = parseInt(startDate.substring(0, 4), 10);
-          const startMonth = parseInt(startDate.substring(4, 6), 10) - 1;
-          const startDay = parseInt(startDate.substring(6, 8), 10);
-          const startD = new Date(startYear, startMonth, startDay);
-          if (startD.getDay() === now.getDay()) return true;
+          if (startDateObj.getDay() === now.getDay()) return true;
         }
       }
     }
+
     return false;
   }
 
@@ -535,21 +576,14 @@
 
             if (summaryMatch && dtstartMatch) {
               const title = summaryMatch[1].trim();
-              const startTimeRaw = dtstartMatch[2] || '080000';
 
-              if (isEventOnDate(block, todayYMD, now)) {
+              if (isEventOnDate(block, now)) {
                 let time = '08:00';
                 if (dtstartMatch[2]) {
-                  const h = parseInt(dtstartMatch[2].substring(0, 2), 10);
-                  const m = parseInt(dtstartMatch[2].substring(2, 4), 10);
-                  if (block.includes('Z')) {
-                    const year = parseInt(dtstartMatch[1].substring(0, 4), 10);
-                    const month = parseInt(dtstartMatch[1].substring(4, 6), 10) - 1;
-                    const day = parseInt(dtstartMatch[1].substring(6, 8), 10);
-                    const d = new Date(Date.UTC(year, month, day, h, m));
-                    time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                  } else {
-                    time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                  const isUtc = block.includes('Z');
+                  const eventDate = parseIcalDate(dtstartMatch[1], dtstartMatch[2], isUtc);
+                  if (eventDate) {
+                    time = `${String(eventDate.getHours()).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')}`;
                   }
                 }
 
@@ -1206,7 +1240,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v14') {
+          if (name !== 'daily-dashboard-v15') {
             caches.delete(name);
           }
         });
