@@ -38,6 +38,7 @@
       { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
       { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
       { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' },
+      { name: 'Glance', title: 'Glance', url: 'https://glance.milestuttle.com/home', icon: '⚡' },
       { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
       { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
       { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
@@ -1210,6 +1211,7 @@
       { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
       { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
       { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' },
+      { name: 'Glance', title: 'Glance', url: 'https://glance.milestuttle.com/home', icon: '⚡' },
       { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
       { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
       { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
@@ -1225,6 +1227,12 @@
     if (!hasGemini) {
       state.shortcuts.splice(3, 0, { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' });
     }
+
+    const hasGlance = state.shortcuts.some(s => s.url && s.url.includes('glance.milestuttle.com'));
+    if (!hasGlance) {
+      state.shortcuts.splice(4, 0, { name: 'Glance', title: 'Glance', url: 'https://glance.milestuttle.com/home', icon: '⚡' });
+    }
+
     saveState();
     renderShortcuts();
 
@@ -1248,6 +1256,7 @@
 
     const getShortcutIcon = (title, url) => {
       const str = (title + ' ' + url).toLowerCase();
+      if (str.includes('glance')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>`;
       if (str.includes('gemini')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9L12 2Z"></path></svg>`;
       if (str.includes('nyt') || str.includes('times')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path></svg>`;
       if (str.includes('esv') || str.includes('bible')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
@@ -1546,7 +1555,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v42') {
+          if (name !== 'daily-dashboard-v43') {
             caches.delete(name);
           }
         });
