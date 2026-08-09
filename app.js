@@ -37,6 +37,7 @@
       { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
       { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
       { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
+      { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' },
       { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
       { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
       { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
@@ -1204,16 +1205,26 @@
 
   // --- SHORTCUTS LAUNCHER ---
   function initShortcuts() {
-    state.shortcuts = [
+    const defaultList = [
       { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
       { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
       { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
+      { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' },
       { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
       { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
       { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
       { name: 'Cañon City Daily Record', title: 'Cañon City Daily Record', url: 'https://www.canoncitydailyrecord.com', icon: '📍' },
       { name: 'Facebook', title: 'Facebook', url: 'https://www.facebook.com', icon: '👥' }
     ];
+
+    if (!state.shortcuts || !Array.isArray(state.shortcuts) || state.shortcuts.length === 0) {
+      state.shortcuts = defaultList;
+    }
+
+    const hasGemini = state.shortcuts.some(s => s.url && s.url.includes('gemini'));
+    if (!hasGemini) {
+      state.shortcuts.splice(3, 0, { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' });
+    }
     saveState();
     renderShortcuts();
 
@@ -1237,6 +1248,7 @@
 
     const getShortcutIcon = (title, url) => {
       const str = (title + ' ' + url).toLowerCase();
+      if (str.includes('gemini')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9L12 2Z"></path></svg>`;
       if (str.includes('nyt') || str.includes('times')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path></svg>`;
       if (str.includes('esv') || str.includes('bible')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
       if (str.includes('mail') || str.includes('gmail')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
@@ -1534,7 +1546,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v41') {
+          if (name !== 'daily-dashboard-v42') {
             caches.delete(name);
           }
         });
