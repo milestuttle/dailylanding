@@ -64,25 +64,15 @@
   // --- DEVOTIONAL CONTENT (OSWALD CHAMBERS MY UTMOST FOR HIS HIGHEST) ---
   const DAILY_DEVOTIONALS = [
     {
-      title: "The Holy One Born in You",
-      verseRef: "Luke 1:35",
-      verseText: "The holy one to be born will be called the Son of God.",
-      excerpt: "If I have been born again from above, the Son of God Himself has been born into my mortal flesh. What was true of the virgin Mary in the introduction of God’s Son into this earth is true in every saved soul: the Son of God is born into us by the direct act of God.",
+      title: "Prayer in the Father’s Hearing",
+      verseRef: "John 11:41",
+      verseText: "Father, I thank you that you have heard me.",
+      excerpt: "When the Son of God prays, he has only one consciousness: the consciousness of his Father. God always hears the prayers of his Son, and if his Son is formed in me, God will always hear my prayers. I have to make sure that the Son of God is manifested in my mortal flesh, through the indwelling Holy Spirit.",
       paragraphs: [
-        "If I have been born again from above, the Son of God himself has been born into my mortal flesh. What was true of the virgin Mary in the introduction of God’s Son into this earth is true in every saved soul: the Son of God is born into us by the direct act of God.",
-        "As a child of God, I have to exercise the right of a child to always be face-to-face with my Father. Am I giving the Son’s holy innocence and simplicity and oneness with the Father a chance to manifest themselves in me? Am I continually responding with amazement to what my common sense tells me to do, saying to it, 'Why are you trying to warn me off? Don’t you know that I have to be in my Father’s house?' Whatever my external circumstances, the holy, innocent, eternal Child within me must remain in contact with the Father.",
-        "Am I simple enough to identify myself with my Lord in this way? Is He getting His way with me? Is God realizing that His Son has been formed in me, or have I put the Lord to the side?",
-        "Oh, the uproar of these days! Everyone is clamoring—for what? For the Son of God to be put to death. There’s no room for the Son of God, no room for quiet, holy communion with the Father."
-      ]
-    },
-    {
-      title: "My Eager Expectation",
-      verseRef: "Philippians 1:20",
-      verseText: "My eager expectation and hope is that I will not be at all ashamed, but that with all boldness, Christ will even now be exalted in my body, whether by life or by death.",
-      excerpt: "We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, 'My eager expectation and hope is that I will not be at all ashamed...' Paul was determined to be completely surrendered to God.",
-      paragraphs: [
-        "We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, 'My eager expectation and hope is that I will not be at all ashamed...' Paul was determined to be completely surrendered to God.",
-        "Has God ever spoken to you about something specific? Is there a point of controversy between your soul and God? If so, get it settled at once. It is never a question of whether God will bless you—he will! The question is whether you will be utterly his."
+        "When the Son of God prays, he has only one consciousness: the consciousness of his Father. God always hears the prayers of his Son, and if his Son is formed in me, God will always hear my prayers. I have to make sure that the Son of God is manifested in my mortal flesh, through the indwelling Holy Spirit. “Do you not know that your bodies are temples of the Holy Spirit?” (1 Corinthians 6:19).",
+        "Is the Son of God getting his chance with me? Is the direct simplicity of his life being worked out in me? When I come in contact with the events of life as an ordinary human being, is the prayer of the eternal Son to his Father being prayed in me? “In that day you will ask in my name” (John 16:26). In which day? The day when the Holy Spirit has come to me and made me one with my Lord.",
+        "Ask yourself if Jesus Christ is being abundantly satisfied in your life, or if you’ve got your spiritual strut on. Never let common sense break in and push the Son of God to the side. Common sense is a gift that God gave human nature, but the gift that comes from his Son is supernatural sense. The Son detects the Father. Common sense has never once detected the Father, and never will. Don’t enthrone common sense.",
+        "Our ordinary wits never worship God unless they are transformed by his indwelling Son. We have to keep our mortal flesh in perfect subjection to him, letting him work through us moment by moment. Are we living in such dependence on Jesus Christ that his life is being manifested in us?"
       ]
     }
   ];
@@ -440,23 +430,33 @@
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
 
-        const mainText = doc.body ? doc.body.textContent : '';
-        if (mainText.includes('Luke') || mainText.includes('God') || mainText.includes('Son')) {
-          // Extract scripture & paragraphs from live page
-          const paragraphs = Array.from(doc.querySelectorAll('p'))
-            .map(p => p.textContent.trim())
-            .filter(txt => txt.length > 30 && !txt.includes('©') && !txt.includes('Copyright'));
+        const titleEl = doc.querySelector('h1.elementor-heading-title, h1.entry-title, h1');
+        const titleText = titleEl ? titleEl.textContent.trim() : '';
 
-          if (paragraphs.length >= 2) {
-            const liveDevo = {
-              title: "The Holy One Born in You",
-              verseRef: "Luke 1:35",
-              verseText: "The holy one to be born will be called the Son of God.",
-              excerpt: paragraphs[0],
-              paragraphs: paragraphs
-            };
-            renderDevotional(liveDevo);
+        const paragraphs = Array.from(doc.querySelectorAll('p'))
+          .map(p => p.textContent.replace(/\s+/g, ' ').trim())
+          .filter(txt => txt.length > 25 && !txt.includes('©') && !txt.includes('Copyright') && !txt.includes('Sign up') && !txt.includes('Oswald Chambers'));
+
+        if (paragraphs.length >= 2) {
+          let verseText = "Father, I thank you that you have heard me.";
+          let verseRef = "John 11:41";
+          let excerptIdx = 0;
+
+          if (paragraphs[0].includes('—') || paragraphs[0].match(/([0-9]?\s?[A-Z][a-z]+\s+[0-9]+:[0-9]+)/)) {
+            const parts = paragraphs[0].split(/—|-/);
+            verseText = parts[0].trim().replace(/^["“]|["”]$/g, '');
+            verseRef = parts[1] ? parts[1].trim() : "John 11:41";
+            excerptIdx = 1;
           }
+
+          const liveDevo = {
+            title: titleText || "Prayer in the Father’s Hearing",
+            verseRef: verseRef,
+            verseText: verseText,
+            excerpt: paragraphs[excerptIdx],
+            paragraphs: paragraphs.slice(excerptIdx)
+          };
+          renderDevotional(liveDevo);
         }
       }
     } catch (e) {
@@ -1534,7 +1534,7 @@
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'daily-dashboard-v40') {
+          if (name !== 'daily-dashboard-v41') {
             caches.delete(name);
           }
         });
