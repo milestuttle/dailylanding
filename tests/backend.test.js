@@ -23,10 +23,18 @@ const scriptProperties = {
 const PropertiesService = { getScriptProperties: () => scriptProperties };
 const LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
 const cacheRemoved = [];
-const CacheService = { getScriptCache: () => ({ remove: k => cacheRemoved.push(k) }) };
+const cacheStore = {};
+const CacheService = { getScriptCache: () => ({
+  remove: k => cacheRemoved.push(k),
+  getAll: keys => { const out = {}; keys.forEach(k => { if (cacheStore[k]) out[k] = cacheStore[k]; }); return out; },
+  put: (k, v) => { cacheStore[k] = v; }
+}) };
+Utilities.DigestAlgorithm = { MD5: 'md5' };
+Utilities.computeDigest = (alg, s) => [...require('crypto').createHash(alg).update(s).digest()];
+Utilities.base64EncodeWebSafe = bytes => Buffer.from(bytes).toString('base64url');
 const ctx = vm.createContext({ Utilities, PropertiesService, LockService, CacheService, console });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8')
-  + '\n;this.api={icalEventsInRange_,zonedToUtc_,addDays_,parseFeed_,parseDevotional_,saveSync_,readSync_,findJoinUrl_,descriptionToText_,apiEvent_,taskLists_,addTask_,setTaskDone_,inbox_,senderName_};', ctx);
+  + '\n;this.api={icalEventsInRange_,zonedToUtc_,addDays_,parseFeed_,parseDevotional_,saveSync_,readSync_,findJoinUrl_,descriptionToText_,apiEvent_,taskLists_,addTask_,setTaskDone_,inbox_,senderName_,dashboard_};', ctx);
 const api = ctx.api;
 const TZ = 'America/Denver';
 const range = d => ({ start: api.zonedToUtc_(d, '00:00', TZ), end: api.zonedToUtc_(api.addDays_(d, 1), '00:00', TZ) });
@@ -349,4 +357,24 @@ console.log('live-shaped devotional ok');
   assert.strictEqual(api.senderName_('<bob@x.org>'), 'bob@x.org');
   delete ctx.Gmail;
   console.log('gmail ok');
+}
+
+// A tasks-only request (what the dashboard asks a work-account copy for)
+{
+  ctx.Tasks = {
+    Tasklists: { list: () => ({ items: [{ id: 'W1', title: 'My Tasks' }] }) },
+    Tasks: { list: () => ({ items: [{ id: 'w', title: 'Grade reports', position: '1' }] }) }
+  };
+  // UrlFetchApp, CalendarApp, and Gmail are deliberately missing: touching them would throw.
+  const out = JSON.parse(JSON.stringify(api.dashboard_({ parts: 'tasks', date: '2026-09-28', tz: TZ, days: '3' })));
+  assert.deepStrictEqual(out.tasks.map(l => l.items.map(t => t.title)), [['Grade reports']]);
+  assert.deepStrictEqual(out.events, []);
+  assert.deepStrictEqual(out.news, []);
+  assert.strictEqual(out.devotional, null);
+  assert.strictEqual(out.inbox, null);
+  assert.strictEqual(out.sync, undefined);
+  assert.deepStrictEqual(out.errors, []);
+  assert.strictEqual(props.get('LAST_VIEW'), undefined, 'a tasks-only request does not change what the timer refreshes');
+  delete ctx.Tasks;
+  console.log('tasks-only request ok');
 }

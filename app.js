@@ -32,6 +32,9 @@
     theme: 'system',
     apiUrl: '',
     apiKey: '',
+    // Optional second Apps Script in another Google account (e.g. work), used for its tasks.
+    workApiUrl: '',
+    workApiKey: '',
     bookmarks: DEFAULT_BOOKMARKS,
     notes: '',
     newsTab: '',
@@ -129,11 +132,14 @@
   const linkify = text => esc(text).replace(/https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
 
   /** POSTs an action to the Apps Script (text/plain skips a CORS preflight it can't answer). */
-  const post = body => callApi(fetch(settings.apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(Object.assign({ key: settings.apiKey }, body))
-  }));
+  const post = (body, account = 'personal') => {
+    const work = account === 'work';
+    return callApi(fetch(work ? settings.workApiUrl : settings.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ key: work ? settings.workApiKey : settings.apiKey }, body))
+    }));
+  };
 
   const saveData = () => { if (data) writeJson(DATA_KEY, data); };
 
@@ -479,6 +485,19 @@
   /* ---------------------------------------------------------------- */
 
   const connected = () => !!(settings.apiUrl && settings.apiKey);
+  const workConnected = () => !!(settings.workApiUrl && settings.workApiKey);
+
+  function dashboardUrl(base, key, force, parts) {
+    const url = new URL(base);
+    url.searchParams.set('action', 'dashboard');
+    url.searchParams.set('key', key);
+    url.searchParams.set('date', localDate());
+    url.searchParams.set('days', String(SCHEDULE_DAYS));
+    url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    if (parts) url.searchParams.set('parts', parts);
+    if (force) url.searchParams.set('refresh', '1');
+    return url;
+  }
 
   async function loadData(force) {
     renderData();
@@ -486,15 +505,21 @@
     $('refresh-btn').hidden = true;
     setStatus('Updating…');
     try {
-      const url = new URL(settings.apiUrl);
-      url.searchParams.set('action', 'dashboard');
-      url.searchParams.set('key', settings.apiKey);
-      url.searchParams.set('date', localDate());
-      url.searchParams.set('days', String(SCHEDULE_DAYS));
-      url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone);
-      if (force) url.searchParams.set('refresh', '1');
-      const payload = await callApi(fetch(url));
-      data = { fetchedAt: Date.now(), payload };
+      const previousWork = data && data.work;
+      const [payload, work] = await Promise.all([
+        callApi(fetch(dashboardUrl(settings.apiUrl, settings.apiKey, force))),
+        // The work account only supplies tasks. Its failure shouldn't hide everything else.
+        workConnected()
+          ? callApi(fetch(dashboardUrl(settings.workApiUrl, settings.workApiKey, force, 'tasks'))).catch(err => ({ failed: err.message }))
+          : null
+      ]);
+      data = {
+        fetchedAt: Date.now(),
+        payload,
+        work: !work ? null
+          : work.failed ? { tasks: previousWork ? previousWork.tasks : null, errors: [work.failed] }
+          : { tasks: work.tasks, errors: work.errors || [] }
+      };
       writeJson(DATA_KEY, data);
       renderData();
       if (payload.sync) applySync(payload.sync);
@@ -534,7 +559,7 @@
     if (!connected()) {
       setStatus('Not connected to Google yet');
     } else if (payload) {
-      const errors = payload.errors || [];
+      const errors = (payload.errors || []).concat(data.work ? data.work.errors.map(e => `Work account: ${e}`) : []);
       const when = fmtTime(new Date(data.fetchedAt));
       setStatus(errors.length ? `Updated ${when}. Problems: ${errors.join('; ')}` : `Updated ${when}`, errors.length > 0);
     }
@@ -799,9 +824,24 @@
   /* Tasks (Google Tasks through the Apps Script)                      */
   /* ---------------------------------------------------------------- */
 
+  /** Task lists from both accounts, each marked with the account it belongs to; null if neither has Tasks. */
   function taskLists() {
     const payload = todayPayload();
-    return payload && Array.isArray(payload.tasks) ? payload.tasks : null;
+    if (!payload) return null;
+    const personal = Array.isArray(payload.tasks) ? payload.tasks : null;
+    const work = data.work && Array.isArray(data.work.tasks) ? data.work.tasks : null;
+    if (!personal && !work) return null;
+    (personal || []).forEach(l => { l.account = 'personal'; });
+    (work || []).forEach(l => { l.account = 'work'; });
+    return (personal || []).concat(work || []);
+  }
+
+  /** "My Tasks", or with two accounts "Work" / "Personal · Church". */
+  function taskListLabel(list, lists) {
+    const accounts = new Set(lists.map(l => l.account));
+    if (accounts.size < 2) return list.title;
+    const name = list.account === 'work' ? 'Work' : 'Personal';
+    return lists.filter(l => l.account === list.account).length === 1 ? name : `${name} · ${list.title}`;
   }
 
   function activeTaskList() {
@@ -828,7 +868,7 @@
     const active = activeTaskList();
     const open = l => l.items.filter(t => !t.done).length;
     $('task-tabs').innerHTML = lists.length > 1
-      ? lists.map(l => `<button type="button" role="tab" class="tab" data-list="${esc(l.id)}" aria-selected="${l === active}">${esc(l.title)}${open(l) ? ` <span class="tab-count">${open(l)}</span>` : ''}</button>`).join('')
+      ? lists.map(l => `<button type="button" role="tab" class="tab" data-list="${esc(l.id)}" aria-selected="${l === active}">${esc(taskListLabel(l, lists))}${open(l) ? ` <span class="tab-count">${open(l)}</span>` : ''}</button>`).join('')
       : '';
     $('task-add').hidden = !active;
     $('task-list').innerHTML = !active ? '<li class="muted">No task lists yet.</li>'
@@ -861,7 +901,7 @@
       task.done = done;
       renderTasks();
       try {
-        await post({ action: 'setTaskDone', listId: list.id, taskId: task.id, done });
+        await post({ action: 'setTaskDone', listId: list.id, taskId: task.id, done }, list.account);
         if (done) {
           // Leave it checked briefly (so a mis-tap can be undone), then remove it.
           setTimeout(() => {
@@ -888,7 +928,7 @@
       if (!title || !list) return;
       input.disabled = true;
       try {
-        const res = await post({ action: 'addTask', listId: list.id, title });
+        const res = await post({ action: 'addTask', listId: list.id, title }, list.account);
         list.items.unshift(res.task);
         input.value = '';
         saveData();
@@ -1243,6 +1283,8 @@
       form.theme.value = settings.theme;
       form.apiUrl.value = settings.apiUrl;
       form.apiKey.value = settings.apiKey;
+      form.workApiUrl.value = settings.workApiUrl;
+      form.workApiKey.value = settings.workApiKey;
       form.bookmarks.value = settings.bookmarks.map(b => `${b.name} | ${b.url}`).join('\n');
       dialog.showModal();
       if (opener.dataset.openSettings === 'bookmarks') {
@@ -1253,7 +1295,7 @@
 
     form.addEventListener('submit', e => {
       e.preventDefault();
-      const before = { city: settings.city, apiUrl: settings.apiUrl, apiKey: settings.apiKey };
+      const before = { city: settings.city, apiUrl: settings.apiUrl, apiKey: settings.apiKey, work: settings.workApiUrl + settings.workApiKey };
       const beforeSynced = SYNC_FIELDS.map(f => JSON.stringify(settings[f]));
       Object.assign(settings, {
         name: form.name.value.trim(),
@@ -1261,6 +1303,8 @@
         theme: form.theme.value,
         apiUrl: form.apiUrl.value.trim(),
         apiKey: form.apiKey.value.trim(),
+        workApiUrl: form.workApiUrl.value.trim(),
+        workApiKey: form.workApiKey.value.trim(),
         bookmarks: parseBookmarks(form.bookmarks.value)
       });
       saveSettings();
@@ -1275,6 +1319,8 @@
         saveSettings();
         data = null;
         localStorage.removeItem(DATA_KEY);
+        loadData(true);
+      } else if (settings.workApiUrl + settings.workApiKey !== before.work) {
         loadData(true);
       }
     });
