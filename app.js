@@ -190,8 +190,124 @@
   }
 
   /* ---------------------------------------------------------------- */
-  /* Weather (Open-Meteo, no key needed)                               */
+  /* Weather: National Weather Service forecast, Open-Meteo fallback  */
   /* ---------------------------------------------------------------- */
+
+  // Both sources are turned into one shape:
+  // { source, current: { temp, text, icon, wind, humidity, feelsLike }, high, low, precip,
+  //   summary: [{ name, text }], hours: [{ time, temp, precip, icon }],
+  //   days: [{ label, text, icon, high, low, precip }] }
+
+  const NWS = 'https://api.weather.gov';
+
+  /** Weather icon name for an NWS short forecast such as "Chance Rain Showers". */
+  function nwsIcon(text, isDay = true) {
+    const t = (text || '').toLowerCase();
+    if (/thunder|t-storm/.test(t)) return 'storm';
+    if (/snow|flurr|sleet|blizzard|freezing|ice|wintry/.test(t)) return 'snow';
+    if (/rain|shower|drizzle/.test(t)) return 'rain';
+    if (/fog|haze|smoke|dust/.test(t)) return 'fog';
+    if (/partly|mostly sunny/.test(t)) return 'partly';
+    if (/cloudy|overcast/.test(t)) return 'cloud';
+    return isDay ? 'sun' : 'moon';
+  }
+
+  const compass = deg => (deg == null ? '' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(deg / 45) % 8]);
+  const round = n => (n == null || Number.isNaN(n) ? null : Math.round(n));
+
+  async function nwsJson(url) {
+    // The service occasionally answers with a 500; one retry usually succeeds.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(url, { headers: { Accept: 'application/geo+json' } });
+      if (res.ok) return res.json();
+      if (res.status < 500) break;
+    }
+    throw new Error('National Weather Service unavailable');
+  }
+
+  /** Forecast URLs for the location; looked up once and kept with the place. */
+  async function nwsPoint(place) {
+    if (place.nws) return place.nws;
+    const props = (await nwsJson(`${NWS}/points/${place.lat.toFixed(4)},${place.lon.toFixed(4)}`)).properties;
+    place.nws = { forecast: props.forecast, hourly: props.forecastHourly, stations: props.observationStations, station: '' };
+    saveSettings();
+    return place.nws;
+  }
+
+  /** The nearest station's latest reading, or null if it's missing or more than two hours old. */
+  async function latestObservation(point) {
+    if (!point.station) {
+      const stations = await nwsJson(point.stations);
+      point.station = stations.features[0].properties.stationIdentifier;
+      saveSettings();
+    }
+    const o = (await nwsJson(`${NWS}/stations/${point.station}/observations/latest`)).properties;
+    if (!o || !o.temperature || o.temperature.value == null || Date.now() - new Date(o.timestamp) > 2 * 3600e3) return null;
+    return o;
+  }
+
+  async function loadNws(place) {
+    const point = await nwsPoint(place);
+    const [forecast, hourly, obs] = await Promise.all([
+      nwsJson(point.forecast),
+      nwsJson(point.hourly),
+      latestObservation(point).catch(() => null)
+    ]);
+    const periods = forecast.properties.periods;
+    const now = Date.now();
+    const hours = hourly.properties.periods.filter(h => new Date(h.endTime) > now);
+    const pop = h => (h.probabilityOfPrecipitation && h.probabilityOfPrecipitation.value) || 0;
+    const h0 = hours[0] || {};
+    const cToF = c => (c == null ? null : c * 9 / 5 + 32);
+
+    const current = obs
+      ? {
+          temp: round(cToF(obs.temperature.value)),
+          text: obs.textDescription || h0.shortForecast || '',
+          wind: obs.windSpeed && obs.windSpeed.value != null ? `${round(obs.windSpeed.value * 0.621371)} mph ${compass(obs.windDirection && obs.windDirection.value)}`.trim() : '',
+          humidity: round(obs.relativeHumidity && obs.relativeHumidity.value),
+          feelsLike: round(cToF((obs.windChill && obs.windChill.value) ?? (obs.heatIndex && obs.heatIndex.value) ?? obs.temperature.value))
+        }
+      : {
+          temp: h0.temperature,
+          text: h0.shortForecast || '',
+          wind: [h0.windSpeed, h0.windDirection].filter(Boolean).join(' '),
+          humidity: round(h0.relativeHumidity && h0.relativeHumidity.value),
+          feelsLike: null
+        };
+    current.icon = nwsIcon(current.text, h0.isDaytime !== false);
+
+    // Pair each day's daytime period (high) with the night after it (low).
+    const byDate = new Map();
+    periods.forEach(pd => {
+      const date = pd.startTime.slice(0, 10);
+      if (!byDate.has(date)) byDate.set(date, {});
+      byDate.get(date)[pd.isDaytime ? 'day' : 'night'] = pd;
+    });
+    const days = [...byDate.entries()].slice(0, 7).map(([date, { day, night }], i) => {
+      const main = day || night;
+      return {
+        label: i === 0 ? (day ? 'Today' : 'Tonight') : new Date(`${date}T12:00`).toLocaleDateString('en-US', { weekday: 'short' }),
+        text: main.shortForecast,
+        icon: nwsIcon(main.shortForecast, !!day),
+        high: day ? day.temperature : null,
+        low: night ? night.temperature : null,
+        precip: Math.max(day ? pop(day) : 0, night ? pop(night) : 0)
+      };
+    });
+    const today = localDate();
+
+    return {
+      source: 'nws',
+      current,
+      high: days[0] ? days[0].high : null,
+      low: days[0] ? days[0].low : null,
+      precip: Math.max(0, ...hours.filter(h => localDate(new Date(h.startTime)) === today).map(pop)),
+      summary: periods.slice(0, 2).map(pd => ({ name: pd.name, text: pd.detailedForecast })),
+      hours: hours.slice(0, 12).map(h => ({ time: new Date(h.startTime), temp: h.temperature, precip: pop(h), icon: nwsIcon(h.shortForecast, h.isDaytime) })),
+      days
+    };
+  }
 
   const WMO = [
     [0, 'Clear', 'sun'], [1, 'Mostly clear', 'partly'], [2, 'Partly cloudy', 'partly'], [3, 'Overcast', 'cloud'],
@@ -201,8 +317,69 @@
 
   function describeWeather(code, isDay = 1) {
     const hit = WMO.find(([max]) => code <= max) || WMO[WMO.length - 1];
-    const iconName = hit[2] === 'sun' && !isDay ? 'moon' : hit[2];
-    return { text: hit[1], icon: iconName };
+    return { text: hit[1], icon: hit[2] === 'sun' && !isDay ? 'moon' : hit[2] };
+  }
+
+  /** Fallback when the NWS is unavailable (or the location is outside the U.S.). */
+  async function loadOpenMeteo(place) {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast'
+      + `?latitude=${place.lat}&longitude=${place.lon}&timezone=auto&forecast_days=7`
+      + '&temperature_unit=fahrenheit&wind_speed_unit=mph'
+      + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,is_day'
+      + '&hourly=temperature_2m,precipitation_probability,weather_code,is_day'
+      + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
+    if (!res.ok) throw new Error('Weather service error');
+    const w = await res.json();
+    const c = w.current;
+    const d = describeWeather(c.weather_code, c.is_day);
+    let start = w.hourly.time.findIndex(t => t >= c.time.slice(0, 13));
+    if (start < 0) start = 0;
+    return {
+      source: 'open-meteo',
+      current: { temp: round(c.temperature_2m), text: d.text, icon: d.icon, wind: `${round(c.wind_speed_10m)} mph ${compass(c.wind_direction_10m)}`.trim(), humidity: round(c.relative_humidity_2m), feelsLike: round(c.apparent_temperature) },
+      high: round(w.daily.temperature_2m_max[0]),
+      low: round(w.daily.temperature_2m_min[0]),
+      precip: w.daily.precipitation_probability_max[0] || 0,
+      summary: [],
+      hours: w.hourly.time.slice(start, start + 12).map((t, i) => ({
+        time: new Date(t),
+        temp: round(w.hourly.temperature_2m[start + i]),
+        precip: w.hourly.precipitation_probability[start + i] || 0,
+        icon: describeWeather(w.hourly.weather_code[start + i], w.hourly.is_day[start + i]).icon
+      })),
+      days: w.daily.time.map((t, i) => {
+        const dd = describeWeather(w.daily.weather_code[i]);
+        return {
+          label: i === 0 ? 'Today' : new Date(`${t}T12:00`).toLocaleDateString('en-US', { weekday: 'short' }),
+          text: dd.text,
+          icon: dd.icon,
+          high: round(w.daily.temperature_2m_max[i]),
+          low: round(w.daily.temperature_2m_min[i]),
+          precip: w.daily.precipitation_probability_max[i] || 0
+        };
+      })
+    };
+  }
+
+  /** Sunrise and sunset for a date and place (the standard NOAA/SunCalc approximation). */
+  function sunTimes(date, lat, lon) {
+    const rad = Math.PI / 180;
+    const J1970 = 2440588;
+    const J2000 = 2451545;
+    const noon = new Date(date);
+    noon.setHours(12, 0, 0, 0);
+    const d = noon / 86400000 - 0.5 + J1970 - J2000;
+    const lw = -lon * rad;
+    const n = Math.round(d - 0.0009 - lw / (2 * Math.PI));
+    const ds = 0.0009 + lw / (2 * Math.PI) + n;
+    const M = rad * (357.5291 + 0.98560028 * ds);
+    const L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+    const dec = Math.asin(Math.sin(rad * 23.4397) * Math.sin(L));
+    const jNoon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    const w = Math.acos((Math.sin(rad * -0.833) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec)));
+    const jSet = J2000 + 0.0009 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    const toDate = j => new Date((j + 0.5 - J1970) * 86400000);
+    return { rise: toDate(jNoon - (jSet - jNoon)), set: toDate(jSet) };
   }
 
   async function findPlace(query) {
@@ -230,21 +407,17 @@
         if (!settings.place) throw new Error(`Couldn't find "${settings.city}"`);
         saveSettings();
       }
-      const p = settings.place;
-      const url = 'https://api.open-meteo.com/v1/forecast'
-        + `?latitude=${p.lat}&longitude=${p.lon}&timezone=auto&forecast_days=7`
-        + '&temperature_unit=fahrenheit&wind_speed_unit=mph'
-        + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day'
-        + '&hourly=temperature_2m,precipitation_probability,weather_code,is_day'
-        + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset';
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Weather service error');
-      weather = await res.json();
+      const place = settings.place;
+      try {
+        weather = await loadNws(place);
+      } catch (e) {
+        weather = await loadOpenMeteo(place);
+      }
       const c = weather.current;
-      const d = describeWeather(c.weather_code, c.is_day);
-      $('weather-temp').textContent = `${Math.round(c.temperature_2m)}°`;
-      $('weather-desc').textContent = `${d.text} · H ${Math.round(weather.daily.temperature_2m_max[0])}° L ${Math.round(weather.daily.temperature_2m_min[0])}°`;
-      $('weather-icon').innerHTML = `<use href="#i-${d.icon}"/>`;
+      const hl = [weather.high != null && `H ${weather.high}°`, weather.low != null && `L ${weather.low}°`].filter(Boolean).join(' ');
+      $('weather-temp').textContent = c.temp != null ? `${c.temp}°` : '--°';
+      $('weather-desc').textContent = [c.text, hl].filter(Boolean).join(' · ');
+      $('weather-icon').innerHTML = `<use href="#i-${c.icon}"/>`;
       chip.disabled = false;
       loadAlerts();
     } catch (e) {
@@ -255,57 +428,50 @@
   }
 
   function renderWeatherDialog() {
-    if (!weather) return;
+    if (!weather || !settings.place) return;
+    const place = settings.place;
     const c = weather.current;
-    const daily = weather.daily;
-    const hourly = weather.hourly;
-    const now = describeWeather(c.weather_code, c.is_day);
-    const clockTime = iso => fmtTime(new Date(iso)); // Open-Meteo times are local to the location
+    const sun = sunTimes(new Date(), place.lat, place.lon);
+    const coords = `${place.lat.toFixed(4)},${place.lon.toFixed(4)}`;
 
-    $('weather-dialog-title').textContent = settings.place ? settings.place.name : 'Weather';
-
-    let start = hourly.time.findIndex(t => t >= c.time.slice(0, 13));
-    if (start < 0) start = 0;
-    const hours = hourly.time.slice(start, start + 12).map((t, i) => {
-      const j = start + i;
-      const d = describeWeather(hourly.weather_code[j], hourly.is_day[j]);
-      return `<li class="hour">
-        <span class="muted small">${i === 0 ? 'Now' : new Date(t).toLocaleTimeString('en-US', { hour: 'numeric' })}</span>
+    $('weather-dialog-title').textContent = place.name;
+    const hours = weather.hours.map((h, i) => `<li class="hour">
+        <span class="muted small">${i === 0 ? 'Now' : h.time.toLocaleTimeString('en-US', { hour: 'numeric' })}</span>
+        ${icon(h.icon)}
+        <strong>${h.temp}°</strong>
+        <span class="muted small">${h.precip}%</span>
+      </li>`).join('');
+    const days = weather.days.map(d => `<li class="day">
+        <span class="day-name">${esc(d.label)}</span>
         ${icon(d.icon)}
-        <strong>${Math.round(hourly.temperature_2m[j])}°</strong>
-        <span class="muted small">${hourly.precipitation_probability[j] || 0}%</span>
-      </li>`;
-    }).join('');
-
-    const days = daily.time.map((t, i) => {
-      const d = describeWeather(daily.weather_code[i]);
-      const label = i === 0 ? 'Today' : new Date(`${t}T12:00`).toLocaleDateString('en-US', { weekday: 'short' });
-      return `<li class="day">
-        <span class="day-name">${label}</span>
-        ${icon(d.icon)}
-        <span class="muted small day-desc">${d.text}${daily.precipitation_probability_max[i] ? ` · ${daily.precipitation_probability_max[i]}%` : ''}</span>
-        <span class="day-temps"><span class="muted">${Math.round(daily.temperature_2m_min[i])}°</span> ${Math.round(daily.temperature_2m_max[i])}°</span>
-      </li>`;
-    }).join('');
+        <span class="muted small day-desc">${esc(d.text)}${d.precip ? ` · ${d.precip}%` : ''}</span>
+        <span class="day-temps"><span class="muted">${d.low != null ? `${d.low}°` : ''}</span> ${d.high != null ? `${d.high}°` : ''}</span>
+      </li>`).join('');
 
     $('weather-dialog-body').innerHTML = `
       <div class="wx-now">
-        ${icon(now.icon, 'icon-xl')}
+        ${icon(c.icon, 'icon-xl')}
         <div>
-          <div class="wx-temp">${Math.round(c.temperature_2m)}°</div>
-          <div class="muted">${now.text} · feels like ${Math.round(c.apparent_temperature)}°</div>
+          <div class="wx-temp">${c.temp != null ? `${c.temp}°` : '--°'}</div>
+          <div class="muted">${esc(c.text)}${c.feelsLike != null && c.feelsLike !== c.temp ? ` · feels like ${c.feelsLike}°` : ''}</div>
         </div>
       </div>
       <dl class="wx-stats">
-        <div><dt>Wind</dt><dd>${Math.round(c.wind_speed_10m)} mph</dd></div>
-        <div><dt>Rain chance</dt><dd>${daily.precipitation_probability_max[0] || 0}%</dd></div>
-        <div><dt>Sunrise</dt><dd>${clockTime(daily.sunrise[0])}</dd></div>
-        <div><dt>Sunset</dt><dd>${clockTime(daily.sunset[0])}</dd></div>
+        <div><dt>Wind</dt><dd>${esc(c.wind || '--')}</dd></div>
+        <div><dt>Humidity</dt><dd>${c.humidity != null ? `${c.humidity}%` : '--'}</dd></div>
+        <div><dt>Rain chance</dt><dd>${weather.precip}%</dd></div>
+        <div><dt>Sunrise · Sunset</dt><dd>${fmtTime(sun.rise)}<br>${fmtTime(sun.set)}</dd></div>
       </dl>
+      ${weather.summary.length ? `<div class="wx-summary">${weather.summary.map(p => `<p><strong>${esc(p.name)}:</strong> ${esc(p.text)}</p>`).join('')}</div>` : ''}
       <h3 class="section-label">Next 12 hours</h3>
       <ul class="hours">${hours}</ul>
       <h3 class="section-label">7 days</h3>
-      <ul class="days">${days}</ul>`;
+      <ul class="days">${days}</ul>
+      <p class="wx-source muted small">
+        ${weather.source === 'nws' ? 'Forecast from the National Weather Service.' : 'The National Weather Service was unavailable, so this forecast is from Open-Meteo.'}
+        <a href="https://forecast.weather.gov/MapClick.php?lat=${place.lat.toFixed(4)}&amp;lon=${place.lon.toFixed(4)}" target="_blank" rel="noopener">NWS forecast ${icon('external')}</a>
+        <a href="https://weather.com/weather/today/l/${coords}" target="_blank" rel="noopener">weather.com ${icon('external')}</a>
+      </p>`;
   }
 
   /* ---------------------------------------------------------------- */

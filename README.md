@@ -93,7 +93,7 @@ If a change adds a new permission to `appsscript.json`, the deploy still succeed
 | Schedule, Join buttons, event details | Google Calendar (Calendar API service), or a calendar's secret iCal address | Calendar |
 | Tasks | Google Tasks (Tasks service) | Tasks |
 | Inbox | Gmail (Gmail service), unread messages in your inbox | Gmail, read only |
-| Weather and alerts | Open-Meteo and the National Weather Service, straight from your browser | none |
+| Weather and alerts | The National Weather Service (current conditions from the nearest station, the local forecast office's hourly and 7-day forecast, and alerts), straight from your browser. Open-Meteo is used only if the NWS is unavailable. | none |
 
 `appsscript.json` turns on the Calendar API, Tasks, and Gmail services. If you paste it by hand, they switch on when you save. The Tasks and Inbox cards only appear once those services work, and the page falls back to basic calendar details if the Calendar API service is off.
 
@@ -132,4 +132,4 @@ Every push to `main` runs the tests and then deploys the page to GitHub Pages th
 - Calendar data goes from Google to your Apps Script to your browser. No third-party proxies are involved.
 - Synced notes and bookmarks are stored in your Apps Script project's Script Properties, in your Google account.
 - The API key and web app URL are stored in each browser's localStorage. Settings → Export includes them, so keep backup files private.
-- Headlines link directly to their publishers. Weather requests send only your location's coordinates to Open-Meteo.
+- Headlines link directly to their publishers. Weather requests send only your location's coordinates to the National Weather Service (or Open-Meteo as a fallback); finding the location by name uses Open-Meteo's geocoder.
