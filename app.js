@@ -11,6 +11,7 @@
   const DATA_KEY = 'dailydash:data';
   const LEGACY_KEY = 'daily_dashboard_state_v1';
   const REFRESH_MS = 15 * 60 * 1000;
+  const SCHEDULE_DAYS = 3; // today plus the next two days
 
   const DEFAULT_BOOKMARKS = [
     { name: 'Gmail', url: 'https://mail.google.com' },
@@ -298,6 +299,7 @@
       url.searchParams.set('action', 'dashboard');
       url.searchParams.set('key', settings.apiKey);
       url.searchParams.set('date', localDate());
+      url.searchParams.set('days', String(SCHEDULE_DAYS));
       url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone);
       if (force) url.searchParams.set('refresh', '1');
       const payload = await callApi(fetch(url));
@@ -426,29 +428,46 @@
 
     const now = Date.now();
     const events = payload.events || [];
-    const allDay = events.filter(e => e.allDay);
-    const timed = events.filter(e => !e.allDay);
     const dot = e => `<span class="cal-dot" data-cal="${Number(e.calIndex) % 4}" title="${esc(e.calendar)}"></span>`;
 
-    const next = timed.find(e => new Date(e.end) > now);
+    // One bucket per day. All-day events appear on every day they cover;
+    // timed events on the day they start (or the first day, if earlier).
+    const days = Array.from({ length: payload.days || 1 }, (_, i) => {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() + i);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return { i, start: start.getTime(), end: end.getTime(), date: start, allDay: [], timed: [] };
+    });
+    events.forEach(e => {
+      const s = new Date(e.start).getTime();
+      const end = new Date(e.end).getTime();
+      if (e.allDay) {
+        days.forEach(d => { if (s < d.end && end > d.start) d.allDay.push(e); });
+      } else {
+        const d = days.find(x => s >= x.start && s < x.end) || (s < days[0].start ? days[0] : null);
+        if (d) d.timed.push(e);
+      }
+    });
+    const dayName = d => (d.i === 0 ? 'Today' : d.i === 1 ? 'Tomorrow' : d.date.toLocaleDateString('en-US', { weekday: 'long' }));
+
+    const nextDay = days.find(d => d.timed.some(e => new Date(e.end) > now));
+    const next = nextDay && nextDay.timed.find(e => new Date(e.end) > now);
     if (next) {
       const starts = new Date(next.start);
-      nextUp.textContent = starts <= now ? `Now: ${next.title}` : `Next: ${next.title} at ${fmtTime(starts)}`;
+      const when = nextDay.i === 0 ? `at ${fmtTime(starts)}` : `${dayName(nextDay).toLowerCase()} at ${fmtTime(starts)}`;
+      nextUp.textContent = starts <= now ? `Now: ${next.title}` : `Next: ${next.title} ${when}`;
       nextUp.hidden = false;
     } else {
       nextUp.hidden = true;
     }
 
-    if (!events.length) {
-      body.innerHTML = '<p class="muted">Nothing on the calendar today.</p>';
-      return;
-    }
-
-    body.innerHTML = `
-      ${calendars.length > 1 ? `<div class="legend">${calendars.map(c => `<span>${dot({ calIndex: c.index, calendar: c.name })}${esc(c.name)}</span>`).join('')}</div>` : ''}
-      ${allDay.length ? `<ul class="all-day">${allDay.map(e => `<li>${dot(e)}${esc(e.title)}</li>`).join('')}</ul>` : ''}
-      <ol class="events">
-        ${timed.map(e => {
+    const renderDay = d => `
+      <div class="agenda-day">
+        <h3 class="agenda-day-label">${dayName(d)} <span class="muted">${d.date.toLocaleDateString('en-US', d.i < 2 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' })}</span></h3>
+        ${d.allDay.length ? `<ul class="all-day">${d.allDay.map(e => `<li>${dot(e)}${esc(e.title)}</li>`).join('')}</ul>` : ''}
+        ${d.timed.length ? `<ol class="events">${d.timed.map(e => {
           const s = new Date(e.start);
           const end = new Date(e.end);
           const state = end <= now ? 'past' : s <= now ? 'now' : '';
@@ -459,8 +478,13 @@
               ${e.location ? `<span class="event-loc muted">${esc(e.location)}</span>` : ''}
             </span>
           </li>`;
-        }).join('')}
-      </ol>`;
+        }).join('')}</ol>` : ''}
+        ${!d.allDay.length && !d.timed.length ? '<p class="muted small">Nothing scheduled</p>' : ''}
+      </div>`;
+
+    body.innerHTML = `
+      ${calendars.length > 1 ? `<div class="legend">${calendars.map(c => `<span>${dot({ calIndex: c.index, calendar: c.name })}${esc(c.name)}</span>`).join('')}</div>` : ''}
+      ${days.map(renderDay).join('')}`;
   }
 
   function initEvents() {
@@ -508,7 +532,9 @@
             allDay: form.allDay.checked,
             start: form.start.value,
             end: form.end.value,
-            tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            viewDate: localDate(),
+            days: SCHEDULE_DAYS
           })
         }));
         dialog.close();
