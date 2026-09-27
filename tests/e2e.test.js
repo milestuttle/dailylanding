@@ -88,6 +88,32 @@ const newTasks = () => [
   { id: 'L2', title: 'Church', items: [{ id: 'c', title: 'Missions budget', notes: '', due: '', parent: '', position: '1' }] }
 ];
 
+// National Weather Service responses for Cañon City (NWS Pueblo).
+const NWS_GRID = 'https://api.weather.gov/gridpoints/PUB/80,58';
+const nwsPoints = { properties: { forecast: `${NWS_GRID}/forecast`, forecastHourly: `${NWS_GRID}/forecast/hourly`, observationStations: `${NWS_GRID}/stations` } };
+const period = (startTime, isDaytime, temperature, shortForecast, pop, extra = {}) => Object.assign({
+  startTime, endTime: startTime, isDaytime, temperature, temperatureUnit: 'F', shortForecast,
+  probabilityOfPrecipitation: { value: pop }, windSpeed: '10 mph', windDirection: 'W'
+}, extra);
+const nwsForecast = { properties: { periods: [
+  period('2026-09-28T06:00:00-06:00', true, 72, 'Sunny', 0, { name: 'Today', detailedForecast: 'Sunny, with a high near 72. West wind 5 to 10 mph.' }),
+  period('2026-09-28T18:00:00-06:00', false, 44, 'Mostly Clear', 0, { name: 'Tonight', detailedForecast: 'Mostly clear, with a low around 44.' }),
+  period('2026-09-29T06:00:00-06:00', true, 65, 'Chance Rain Showers', 40, { name: 'Tuesday', detailedForecast: '' }),
+  period('2026-09-29T18:00:00-06:00', false, 38, 'Rain And Snow Showers Likely', 60, { name: 'Tuesday Night', detailedForecast: '' }),
+  period('2026-09-30T06:00:00-06:00', true, 58, 'Chance Showers And Thunderstorms', 30, { name: 'Wednesday', detailedForecast: '' }),
+  period('2026-09-30T18:00:00-06:00', false, 36, 'Partly Cloudy', 10, { name: 'Wednesday Night', detailedForecast: '' })
+] } };
+const nwsHourly = { properties: { periods: Array.from({ length: 24 }, (_, i) => {
+  const start = new Date(Date.parse('2026-09-28T09:00:00-06:00') + i * 3600e3);
+  return Object.assign(period(start.toISOString(), i < 9, 60 + i, i === 3 ? 'Partly Sunny' : 'Sunny', i === 5 ? 20 : 0), {
+    endTime: new Date(start.getTime() + 3600e3).toISOString(), relativeHumidity: { value: 30 }
+  });
+}) } };
+const nwsObservation = { properties: {
+  timestamp: '2026-09-28T16:00:00Z', textDescription: 'Mostly Sunny', temperature: { value: 18.9 },
+  windSpeed: { value: 16.1 }, windDirection: { value: 270 }, relativeHumidity: { value: 28.4 }, windChill: { value: null }, heatIndex: { value: null }
+} };
+
 const nwsAlerts = {
   features: [
     { properties: { event: 'Wind Advisory', severity: 'Moderate', messageType: 'Alert', headline: 'Wind Advisory until 6 PM', description: 'West winds 25 to 35 mph.', instruction: 'Secure outdoor objects.', ends: '2026-09-29T00:00:00Z', senderName: 'NWS Pueblo CO' } },
@@ -125,8 +151,20 @@ async function run() {
     await ctx.route(/geocoding-api\.open-meteo\.com/, r => r.fulfill({ json: { results: [{ name: 'Cañon City', admin1: 'Colorado', country_code: 'US', latitude: 38.44, longitude: -105.24 }] } }));
     await ctx.route(/\/\/api\.open-meteo\.com/, r => r.fulfill({ json: forecast }));
     await ctx.route(/api\.weather\.gov/, r => {
-      backend.alertUrl = r.request().url();
-      return r.fulfill({ json: backend.noExtras ? { features: [] } : nwsAlerts });
+      const url = r.request().url();
+      if (url.includes('/alerts/')) {
+        backend.alertUrl = url;
+        return r.fulfill({ json: backend.noExtras ? { features: [] } : nwsAlerts });
+      }
+      // With noExtras the NWS forecast is "down", so the page falls back to Open-Meteo.
+      if (backend.noExtras) return r.fulfill({ status: 500, json: {} });
+      (backend.nwsCalls = backend.nwsCalls || []).push(url);
+      if (url.includes('/points/')) return r.fulfill({ json: nwsPoints });
+      if (url.endsWith('/forecast')) return r.fulfill({ json: nwsForecast });
+      if (url.endsWith('/forecast/hourly')) return r.fulfill({ json: nwsHourly });
+      if (url.endsWith('/stations')) return r.fulfill({ json: { features: [{ properties: { stationIdentifier: 'KCCU' } }] } });
+      if (url.includes('/stations/KCCU/observations/latest')) return r.fulfill({ json: nwsObservation });
+      return r.fulfill({ status: 404, json: {} });
     });
     await ctx.route(/script\.google\.com/, r => {
       const req = r.request();
@@ -277,10 +315,27 @@ async function run() {
     await page.keyboard.press('Escape');
 
     // Weather
-    assert.strictEqual(await page.textContent('#weather-temp'), '64°');
+    // Weather from the National Weather Service: current reading from the nearest station.
+    assert.strictEqual(await page.textContent('#weather-temp'), '66°', '18.9 °C from the station');
+    assert.strictEqual(await page.textContent('#weather-desc'), 'Mostly Sunny · H 72° L 44°');
+    assert(backend.nwsCalls.some(u => u.endsWith('/points/38.4400,-105.2400')));
     await page.click('#weather-chip');
     assert.strictEqual(await page.locator('.hour').count(), 12);
     assert.strictEqual(await page.locator('.hour span').first().textContent(), 'Now');
+    assert.match(await page.textContent('.wx-stats'), /10 mph W/);
+    assert.match(await page.textContent('.wx-stats'), /28%/);
+    assert.match(await page.textContent('.wx-stats'), /6:55 AM\s*6:50 PM/, 'sunrise and sunset');
+    assert.match(await page.textContent('.wx-summary'), /Today: Sunny, with a high near 72/);
+    const days = (await page.locator('.day').allTextContents()).map(t => t.replace(/\s+/g, ' ').trim());
+    assert.deepStrictEqual(days, [
+      'Today Sunny 44° 72°',
+      'Tue Chance Rain Showers · 60% 38° 65°',
+      'Wed Chance Showers And Thunderstorms · 30% 36° 58°'
+    ]);
+    assert.deepStrictEqual(await page.locator('.day use').evaluateAll(els => els.map(e => e.getAttribute('href'))), ['#i-sun', '#i-rain', '#i-storm']);
+    assert.strictEqual(await page.getAttribute('.wx-source a[href*="weather.com"]', 'href'), 'https://weather.com/weather/today/l/38.4400,-105.2400');
+    assert.match(await page.getAttribute('.wx-source a[href*="forecast.weather.gov"]', 'href'), /lat=38\.4400&lon=-105\.2400/);
+    await shot(page, 'weather');
     await page.click('#weather-dialog [data-close]');
 
     // News: empty categories are hidden; tabs switch.
@@ -348,6 +403,11 @@ async function run() {
     assert(await page.isHidden('#nav-tasks'));
     assert(await page.isHidden('#inbox'));
     assert(await page.isHidden('#alerts'));
+    assert.strictEqual(await page.textContent('#weather-temp'), '64°', 'falls back to Open-Meteo when the NWS is down');
+    await page.click('#weather-chip');
+    assert.match(await page.textContent('.wx-source'), /from Open-Meteo/);
+    assert.strictEqual(await page.locator('.day').count(), 7);
+    await page.click('#weather-dialog [data-close]');
     await shot(page, 'phone', { fullPage: true });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert(!overflow, 'no horizontal scrolling on a phone');

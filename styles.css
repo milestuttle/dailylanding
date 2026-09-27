@@ -784,6 +784,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wx-stats dd { margin: 2px 0 0; font-weight: 700; }
 @media (max-width: 520px) { .wx-stats { grid-template-columns: repeat(2, 1fr); } }
 
+.wx-summary {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.wx-summary p + p { margin-top: 8px; }
+.wx-source { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 16px; }
+.wx-source a { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; text-decoration: none; }
+.wx-source .icon { width: 13px; height: 13px; }
 .section-label { margin: 0 0 8px; color: var(--muted); font-size: 0.8125rem; font-weight: 700; }
 
 .hours {
