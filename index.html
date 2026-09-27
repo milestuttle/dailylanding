@@ -1,482 +1,238 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Daily personal landing page</title>
-  <meta name="description" content="Your daily dashboard for calendar, devotional, news, weather, and productivity.">
-  
-  <!-- PWA Meta -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DailyDash</title>
+  <meta name="description" content="Daily landing page: schedule, devotional, weather, news, bookmarks, and notes.">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-  <meta name="theme-color" content="#0f172a">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141517" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="DailyDash">
-
-  <!-- Fonts & Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  
+  <script>
+    // Apply a saved light/dark choice before first paint.
+    try {
+      var t = JSON.parse(localStorage.getItem('dailydash:v2') || '{}').theme;
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <!-- MANAGEMATE NAVIGATION RAIL (DESKTOP: FIXED LEFT SIDEBAR / MOBILE: FLOATING BOTTOM DOCK) -->
-  <nav class="app-nav-rail" id="app-nav-rail" aria-label="Quick Navigation">
-    <div class="rail-brand" title="DailyDash Workspace">
-      <span class="rail-logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></span>
-    </div>
-    <div class="rail-links">
-      <button class="rail-btn active" data-target="top" title="Home / Overview">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span>
-        <span class="rail-label">Home</span>
-      </button>
-      <button class="rail-btn" data-target="widget-devotional" title="My Utmost Devotional">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></span>
-        <span class="rail-label">Devo</span>
-      </button>
-      <button class="rail-btn" data-target="widget-agenda" title="Schedule">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
-        <span class="rail-label">Schedule</span>
-      </button>
-      <button class="rail-btn" data-target="widget-launcher" title="Bookmarks">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg></span>
-        <span class="rail-label">Bookmarks</span>
-      </button>
-      <button class="rail-btn" data-target="widget-news" title="News">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8z"></path></svg></span>
-        <span class="rail-label">News</span>
-      </button>
-      <button class="rail-btn" data-target="widget-scratchpad" title="Notes">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></span>
-        <span class="rail-label">Notes</span>
-      </button>
-    </div>
-    <div class="rail-footer">
-      <button class="rail-btn" id="rail-command-btn" title="Search (Cmd + K)">
-        <span class="rail-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
-        <span class="rail-label">Search</span>
-      </button>
-    </div>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="4"/><path d="m10 8 6 4-6 4z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-partly" viewBox="0 0 24 24"><path d="M12 2v1.5M4.9 4.9l1 1M2 12h1.5M19.1 4.9l-1 1"/><path d="M15.9 10.1A4.5 4.5 0 0 0 7.6 9.4"/><path d="M17.5 21H9a5 5 0 1 1 1.6-9.74A5.5 5.5 0 0 1 21 14.5 3.5 3.5 0 0 1 17.5 21z"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></symbol>
+    <symbol id="i-fog" viewBox="0 0 24 24"><path d="M5 8h14M3 12h18M5 16h14M8 20h8"/></symbol>
+    <symbol id="i-rain" viewBox="0 0 24 24"><path d="M16 13v8M8 13v8M12 15v8"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></symbol>
+    <symbol id="i-snow" viewBox="0 0 24 24"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><path d="M8 16h.01M8 20h.01M12 18h.01M12 22h.01M16 16h.01M16 20h.01"/></symbol>
+    <symbol id="i-storm" viewBox="0 0 24 24"><path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/><path d="m13 11-4 6h6l-4 6"/></symbol>
+  </svg>
+
+  <nav class="nav" aria-label="Sections">
+    <a class="nav-link" href="#devotional"><svg class="icon"><use href="#i-book"/></svg><span>Devotional</span></a>
+    <a class="nav-link" href="#schedule"><svg class="icon"><use href="#i-calendar"/></svg><span>Schedule</span></a>
+    <a class="nav-link" href="#links"><svg class="icon"><use href="#i-bookmark"/></svg><span>Links</span></a>
+    <a class="nav-link" href="#news"><svg class="icon"><use href="#i-news"/></svg><span>News</span></a>
+    <a class="nav-link" href="#notes"><svg class="icon"><use href="#i-note"/></svg><span>Notes</span></a>
+    <button class="nav-link nav-settings" type="button" data-open-settings><svg class="icon"><use href="#i-settings"/></svg><span>Settings</span></button>
   </nav>
 
-  <div class="app-container">
-    
-    <!-- SEMRUSH TOP BRAND NAVIGATION BAR -->
-    <nav class="semrush-top-nav glass-card">
-      <div class="nav-brand-group">
-        <div class="brand-logo-badge"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></div>
-        <div class="brand-text-wrap">
-          <span class="brand-name">DailyDash</span>
-          <span class="brand-tag">PERSONAL WORKSPACE</span>
-        </div>
+  <div class="page">
+    <header class="top">
+      <div class="top-text">
+        <p class="eyebrow" id="today-date"></p>
+        <h1 id="greeting">Hello</h1>
+        <p class="next-up" id="next-up" hidden></p>
       </div>
-      <div class="nav-center-group">
-        <button class="command-trigger-btn" id="command-palette-btn" title="Open Command Palette (Cmd + K)">
-          <span class="cmd-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
-          <span class="cmd-text">Search bookmarks, news, actions...</span>
-          <kbd class="cmd-kbd">⌘K</kbd>
+      <div class="top-side">
+        <button class="weather-chip" id="weather-chip" type="button" aria-label="Weather details" disabled>
+          <svg class="icon icon-lg" id="weather-icon"><use href="#i-sun"/></svg>
+          <span class="weather-text">
+            <span class="weather-temp" id="weather-temp">--°</span>
+            <span class="weather-desc" id="weather-desc">Loading weather</span>
+          </span>
         </button>
-      </div>
-    </nav>
-
-    <!-- TOP HEADER / HERO BAR -->
-    <header class="hero-header glass-card">
-      <div class="hero-greeting-container">
-        <div class="greeting-text-wrap">
-          <span class="greeting-subtitle" id="current-date-str">Loading date...</span>
-          <h1 class="greeting-title" id="greeting-text">Good morning, <span class="user-name-span" id="display-user-name">Miles</span></h1>
-        </div>
-      </div>
-
-      <div class="hero-widgets">
-        <!-- Schedule Events KPI Chip -->
-        <div class="events-kpi-chip" title="Today's Schedule Events">
-          <span class="kpi-chip-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
-          <div class="kpi-chip-text">
-            <span class="kpi-chip-val" id="kpi-events-val">0 Events</span>
-            <span class="kpi-chip-label">Today's Schedule</span>
-          </div>
-        </div>
-
-        <!-- Live Clock -->
-        <div class="clock-card">
-          <div class="clock-time" id="digital-clock">12:00</div>
-          <div class="clock-seconds" id="digital-seconds">:00 AM</div>
-        </div>
-
-        <!-- Weather Widget -->
-        <div class="weather-card" id="weather-card" title="Click to refresh weather">
-          <div class="weather-icon-wrap" id="weather-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg></div>
-          <div class="weather-details">
-            <div class="weather-temp" id="weather-temp">--°F</div>
-            <div class="weather-desc" id="weather-desc">Fetching weather...</div>
-            <div class="weather-location" id="weather-location">Detecting location</div>
-          </div>
-        </div>
-
-        <!-- Header Actions -->
-        <div class="header-actions">
-          <button class="icon-btn theme-toggle-trigger" id="theme-toggle-btn" title="Toggle Theme (Dark / ManageMate / Branch / Emerald / Violet / Light)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-          </button>
-          <button class="icon-btn" id="focus-mode-btn" title="Toggle Fullscreen Focus">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-          </button>
-          <button class="icon-btn" id="settings-open-btn" title="Dashboard Settings & Sync">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          </button>
-        </div>
+        <div class="clock" id="clock"></div>
+        <button class="icon-btn top-settings" type="button" data-open-settings aria-label="Settings"><svg class="icon"><use href="#i-settings"/></svg></button>
       </div>
     </header>
 
-    <!-- MAIN DASHBOARD GRID -->
-    <main class="dashboard-grid">
-      
-      <!-- COLUMN 1: DEVOTIONAL & CALENDAR -->
-      <section class="grid-col col-left">
-        
-        <!-- DEVOTIONAL WIDGET: MY UTMOST FOR HIS HIGHEST -->
-        <article class="widget-card glass-card devotional-card" id="widget-devotional">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></span>
-              <div>
-                <div class="card-title-row">
-                  <h2 class="card-title">My Utmost for His Highest</h2>
-                </div>
-              </div>
-            </div>
-            <div class="card-header-actions">
-              <a href="https://utmost.org" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Open Utmost.org directly">Visit utmost.org ↗</a>
-              <button class="btn-icon-sm widget-toggle-btn" data-widget="devotional" title="Toggle Devotional Collapse">▼</button>
-            </div>
+    <div class="setup" id="setup" hidden>
+      <p><strong>Connect your Google account</strong> to see today's calendar, the devotional, and news. It's a one-time setup of about ten minutes; the steps are in the <a href="https://github.com/milestuttle/dailylanding#setup" target="_blank" rel="noopener">README</a>.</p>
+      <button class="btn btn-primary" type="button" data-open-settings>Open Settings</button>
+    </div>
+
+    <main class="grid">
+      <div class="col">
+        <section class="card" id="devotional" aria-labelledby="devo-heading">
+          <div class="card-head">
+            <h2 id="devo-heading"><svg class="icon"><use href="#i-book"/></svg>My Utmost for His Highest</h2>
           </div>
+          <div id="devo-body"></div>
+        </section>
 
-          <div class="devotional-body">
-            <!-- Verse Memory Card -->
-            <div class="verse-memory-box">
-              <div class="verse-header">
-                <span class="tag tag-accent">Today's Scripture</span>
-                <button class="btn-text-sm" id="speak-scripture-btn" title="Read verse aloud"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: text-bottom; margin-right: 3px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg> Listen</button>
-              </div>
-              <p class="verse-text" id="daily-scripture-text">"My eager expectation and hope is that I will not be at all ashamed, but that with all boldness, Christ will even now be exalted in my body, whether by life or by death."</p>
-              <span class="verse-ref" id="daily-scripture-ref">— Philippians 1:20</span>
-            </div>
-
-            <!-- Devotional Highlight / Quick Summary -->
-            <div class="devotional-summary-box">
-              <h3 class="devotional-heading" id="devotional-title">My Eager Expectation</h3>
-              <p class="devotional-excerpt" id="devotional-excerpt">
-                We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, "My eager expectation and hope is that I will not be at all ashamed..." Paul was determined to be completely surrendered to God.
-              </p>
-            </div>
-
-            <div class="devotional-actions">
-              <button class="btn btn-primary btn-block" id="read-full-devotional-btn">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Read Full Devotional Entry
-              </button>
-            </div>
+        <section class="card" id="schedule" aria-labelledby="schedule-heading">
+          <div class="card-head">
+            <h2 id="schedule-heading"><svg class="icon"><use href="#i-calendar"/></svg>Today</h2>
+            <button class="btn btn-small" type="button" id="add-event-btn" hidden><svg class="icon"><use href="#i-plus"/></svg>Add</button>
           </div>
-        </article>
+          <div id="schedule-body"></div>
+        </section>
+      </div>
 
-        <!-- CALENDAR & AGENDA WIDGET -->
-        <article class="widget-card glass-card agenda-card" id="widget-agenda">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
-              <div>
-                <div class="card-title-row">
-                  <h2 class="card-title">Today's Schedule & Events</h2>
-                  <span class="header-count-badge" id="agenda-count-badge">Events</span>
-                </div>
-                <span class="card-subtitle" id="agenda-date-subtitle">Loading...</span>
-              </div>
-            </div>
-            <div class="card-header-actions">
-              <button class="btn btn-sm btn-accent" id="add-event-btn">+ Add Event</button>
-              <button class="btn-icon-sm widget-toggle-btn" data-widget="agenda" title="Toggle Schedule Collapse">▼</button>
-            </div>
+      <div class="col">
+        <section class="card" id="links" aria-labelledby="links-heading">
+          <div class="card-head">
+            <h2 id="links-heading"><svg class="icon"><use href="#i-bookmark"/></svg>Bookmarks</h2>
+            <button class="btn btn-small btn-quiet" type="button" data-open-settings="bookmarks">Edit</button>
           </div>
+          <div class="links" id="links-body"></div>
+        </section>
 
-          <div class="agenda-body">
-            <div class="agenda-timeline" id="agenda-events-list">
-              <!-- Events dynamically populated by JS -->
-            </div>
+        <section class="card" id="news" aria-labelledby="news-heading">
+          <div class="card-head">
+            <h2 id="news-heading"><svg class="icon"><use href="#i-news"/></svg>News</h2>
           </div>
+          <div class="tabs" id="news-tabs" role="tablist" aria-label="News categories"></div>
+          <div id="news-body"></div>
+        </section>
 
-          <div class="card-footer agenda-footer">
-            <span class="ical-status" id="ical-sync-status">No calendar feeds set (add them in Settings)</span>
-            <button class="btn-text-sm" id="refresh-ical-btn">Sync Calendar</button>
+        <section class="card" id="notes" aria-labelledby="notes-heading">
+          <div class="card-head">
+            <h2 id="notes-heading"><svg class="icon"><use href="#i-note"/></svg>Notes</h2>
+            <span class="muted small" id="notes-status"></span>
+            <button class="icon-btn" type="button" id="copy-notes" aria-label="Copy notes"><svg class="icon"><use href="#i-copy"/></svg></button>
           </div>
-        </article>
-
-      </section>
-
-      <!-- COLUMN 2: NEWS, NOTES & LAUNCHER -->
-      <section class="grid-col col-right">
-        
-        <!-- BOOKMARKS WIDGET -->
-        <article class="widget-card glass-card launcher-card" id="widget-launcher">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg></span>
-              <div class="card-title-row">
-                <h2 class="card-title">Bookmarks</h2>
-              </div>
-            </div>
-            <div class="card-header-actions">
-              <button class="btn-text-sm" id="edit-shortcuts-btn">Edit Bookmarks</button>
-              <button class="btn-icon-sm widget-toggle-btn" data-widget="launcher" title="Toggle Bookmarks Collapse">▼</button>
-            </div>
-          </div>
-          <div class="shortcuts-grid" id="shortcuts-container">
-            <!-- Dynamic Shortcuts -->
-          </div>
-        </article>
-
-        <!-- NEWS FEED WIDGET -->
-        <article class="widget-card glass-card news-card" id="widget-news">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8z"></path></svg></span>
-              <div>
-                <div class="card-title-row">
-                  <h2 class="card-title">News Feed</h2>
-                  <span class="header-count-badge" id="news-count-badge">4 Feeds</span>
-                </div>
-                <span class="card-subtitle" id="news-feed-name">World Highlights</span>
-              </div>
-            </div>
-            <div class="card-header-actions">
-              <button class="btn-icon-sm" id="refresh-news-btn" title="Refresh RSS News"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
-              <button class="btn-icon-sm widget-toggle-btn" data-widget="news" title="Toggle News Collapse">▼</button>
-            </div>
-          </div>
-
-          <div class="news-category-pills" id="news-category-pills">
-            <button class="pill-btn active" data-category="world">World (NYT)</button>
-            <button class="pill-btn" data-category="national">National (NYT)</button>
-            <button class="pill-btn" data-category="tech">Tech & Innovation</button>
-            <button class="pill-btn" data-category="local">Local News</button>
-          </div>
-
-          <div class="news-feed-list" id="news-feed-container">
-            <div class="loading-spinner-box">Loading news feed...</div>
-          </div>
-        </article>
-
-        <!-- IDEAS & SCRATCHPAD WIDGET -->
-        <article class="widget-card glass-card scratchpad-card" id="widget-scratchpad">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></span>
-              <div>
-                <div class="card-title-row">
-                  <h2 class="card-title">Ideas & Quick Notes</h2>
-                  <span class="header-count-badge" id="scratch-status-badge">Auto-Saved</span>
-                </div>
-                <span class="card-subtitle">Scratchpad</span>
-              </div>
-            </div>
-            <div class="scratch-actions">
-              <button class="btn-text-sm" id="copy-scratch-btn" title="Copy notes to clipboard"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: text-bottom; margin-right: 3px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy</button>
-              <button class="btn-text-sm" id="clear-scratch-btn" title="Clear notes"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: text-bottom;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
-              <button class="btn-icon-sm widget-toggle-btn" data-widget="scratchpad" title="Toggle Scratchpad Collapse">▼</button>
-            </div>
-          </div>
-          <div class="scratchpad-body">
-            <textarea id="scratchpad-textarea" class="custom-textarea" placeholder="Jot down quick thoughts, meeting notes, project ideas, or prayers..."></textarea>
-          </div>
-        </article>
-
-      </section>
-
+          <textarea id="notes-text" class="notes" placeholder="Thoughts, meeting notes, prayers…" aria-label="Notes"></textarea>
+        </section>
+      </div>
     </main>
 
-    <!-- FOOTER -->
-    <footer class="app-footer">
-      <div class="nav-status-group">
-        <button class="icon-btn theme-toggle-trigger" title="Toggle Theme (Dark / ManageMate / Branch / Emerald / Violet / Light)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-        </button>
-        <button class="btn-text-sm" id="density-toggle-btn" title="Toggle Density (Normal / Compact)">📐 Compact</button>
-      </div>
-      <p>Daily Personal Landing Page • Designed for Laptop & Mobile • <span id="sync-status-footer">Saved on this device</span></p>
+    <footer class="foot">
+      <span id="status"></span>
+      <button class="btn btn-small btn-quiet" type="button" id="refresh-btn" hidden><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
     </footer>
-
   </div>
 
-  <!-- WEATHER DETAILS EXTENDED MODAL -->
-  <div class="modal-overlay" id="weather-modal">
-    <div class="modal-card modal-lg glass-card">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title" id="weather-modal-city">Weather Forecast Details</h2>
-          <span class="modal-subtitle" id="weather-modal-subtitle">Hourly & Daily Forecast</span>
-        </div>
-        <button class="modal-close-btn" id="close-weather-modal">&times;</button>
+  <dialog class="dialog dialog-wide" id="devo-dialog" aria-labelledby="devo-dialog-title">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">My Utmost for His Highest</p>
+        <h2 id="devo-dialog-title"></h2>
       </div>
-      <div class="modal-body" id="weather-modal-body">
-        <div class="loading-spinner-box">Loading detailed forecast...</div>
-      </div>
+      <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
     </div>
-  </div>
+    <div class="dialog-body reading" id="devo-dialog-body"></div>
+  </dialog>
 
-  <!-- SCHEDULE QUICK SUMMARY MODAL -->
-  <div class="modal-overlay" id="schedule-summary-modal">
-    <div class="modal-card modal-md glass-card">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Today's Schedule Summary</h2>
-          <span class="modal-subtitle" id="schedule-summary-date">Today</span>
-        </div>
-        <button class="modal-close-btn" id="close-schedule-modal">&times;</button>
+  <dialog class="dialog dialog-wide" id="weather-dialog" aria-labelledby="weather-dialog-title">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">Weather</p>
+        <h2 id="weather-dialog-title"></h2>
       </div>
-      <div class="modal-body" id="schedule-summary-body">
-        <!-- Dynamic Schedule Summary -->
-      </div>
+      <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
     </div>
-  </div>
-  <div class="modal-overlay" id="devotional-modal">
-    <div class="modal-card modal-lg glass-card">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">My Utmost for His Highest</h2>
-          <span class="modal-subtitle">Oswald Chambers • Today's Reading</span>
-        </div>
-        <button class="modal-close-btn" id="close-devotional-modal">&times;</button>
+    <div class="dialog-body" id="weather-dialog-body"></div>
+  </dialog>
+
+  <dialog class="dialog" id="event-dialog" aria-labelledby="event-dialog-title">
+    <form id="event-form">
+      <div class="dialog-head">
+        <h2 id="event-dialog-title">Add to calendar</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
       </div>
-      <div class="modal-body">
-        <div class="devotional-full-content" id="modal-devotional-content">
-          <div class="devotional-modal-header">
-            <h1 id="modal-devo-title">My Eager Expectation</h1>
-            <div class="modal-devo-meta">
-              <span class="tag tag-accent" id="modal-devo-verse-ref">Philippians 1:20</span>
-            </div>
+      <div class="dialog-body fields">
+        <label class="field">Title<input name="title" required autocomplete="off"></label>
+        <label class="field">Calendar<select name="calIndex" id="event-calendar"></select></label>
+        <div class="field-row">
+          <label class="field">Date<input type="date" name="date" required></label>
+          <label class="check"><input type="checkbox" name="allDay">All day</label>
+        </div>
+        <div class="field-row" id="event-times">
+          <label class="field">Starts<input type="time" name="start" value="09:00"></label>
+          <label class="field">Ends<input type="time" name="end" value="10:00"></label>
+        </div>
+        <p class="form-error" id="event-error" hidden></p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="event-save">Add event</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="settings-dialog" aria-labelledby="settings-title">
+    <form id="settings-form">
+      <div class="dialog-head">
+        <h2 id="settings-title">Settings</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="dialog-body fields">
+        <label class="field">Your name<input name="name" autocomplete="given-name"></label>
+        <label class="field">Weather location<input name="city" placeholder="e.g. Cañon City, CO"></label>
+        <label class="field">Appearance
+          <select name="theme">
+            <option value="system">Match device</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+
+        <fieldset class="group">
+          <legend>Google connection</legend>
+          <p class="hint">Your Apps Script web app supplies the calendar, devotional, and news. Both values are stored only in this browser. <a href="https://github.com/milestuttle/dailylanding#setup" target="_blank" rel="noopener">Setup steps</a></p>
+          <label class="field">Web app URL<input name="apiUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+          <label class="field">API key<input name="apiKey" type="password" autocomplete="off"></label>
+        </fieldset>
+
+        <label class="field" id="bookmarks-field">Bookmarks <span class="hint">One per line: Name | https://address</span>
+          <textarea name="bookmarks" rows="8" spellcheck="false"></textarea>
+        </label>
+
+        <fieldset class="group">
+          <legend>Backup</legend>
+          <p class="hint">Settings, bookmarks, and notes live in this browser only. The backup file includes your API key.</p>
+          <div class="button-row">
+            <button class="btn btn-small" type="button" id="export-btn">Export</button>
+            <label class="btn btn-small">Import<input type="file" id="import-file" accept="application/json,.json" hidden></label>
+            <button class="btn btn-small btn-danger" type="button" id="reset-btn">Reset everything</button>
           </div>
-          <div class="modal-devo-verse-box">
-            <p id="modal-devo-verse-text">"My eager expectation and hope is that I will not be at all ashamed, but that with all boldness, Christ will even now be exalted in my body, whether by life or by death."</p>
-          </div>
-          <div class="modal-devo-text-paragraphs" id="modal-devo-paragraphs">
-            <p>We shall all feel very much ashamed if we do not yield to God on the point he has specified with us. Paul says, "My eager expectation and hope is that I will not be at all ashamed..." Paul was determined to be completely surrendered to God.</p>
-            <p>Has God ever spoken to you about something specific? Is there a point of controversy between your soul and God? If so, get it settled at once. It is never a question of whether God will bless you—he will! The question is whether you will be utterly his.</p>
-            <p>To be "utterly His" means that nothing else matters—not your comfort, your reputation, or your plans. Our highest choice must always be His highest glory.</p>
-          </div>
-        </div>
-        
-        <!-- Option to view iframe or link -->
-        <div class="iframe-fallback-bar">
-          <span>Having trouble reading?</span>
-          <a href="https://utmost.org" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open Directly on Utmost.org ↗</a>
-        </div>
+        </fieldset>
       </div>
-    </div>
-  </div>
-
-  <!-- ADD EVENT MODAL -->
-  <div class="modal-overlay" id="event-modal">
-    <div class="modal-card glass-card">
-      <div class="modal-header">
-        <h2 class="modal-title">Add Event / Reminder</h2>
-        <button class="modal-close-btn" id="close-event-modal">&times;</button>
+      <div class="dialog-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit">Save</button>
       </div>
-      <form id="add-event-form" class="modal-body">
-        <div class="input-field-group">
-          <label class="input-label">Event Title</label>
-          <input type="text" id="event-title-input" class="custom-input" placeholder="e.g. Team Sync Meeting" required>
-        </div>
-        <div class="input-row">
-          <div class="input-field-group">
-            <label class="input-label">Time</label>
-            <input type="time" id="event-time-input" class="custom-input" value="09:00" required>
-          </div>
-          <div class="input-field-group">
-            <label class="input-label">Label</label>
-            <select id="event-category-input" class="custom-select">
-              <option value="work">💼 Work</option>
-              <option value="personal">🏠 Personal</option>
-            </select>
-          </div>
-        </div>
-        <span class="field-help">Saved on this device only. This does not add the event to Google Calendar.</span>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-outline" id="cancel-event-btn">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Event</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- SETTINGS MODAL -->
-  <div class="modal-overlay" id="settings-modal">
-    <div class="modal-card modal-md glass-card">
-      <div class="modal-header">
-        <h2 class="modal-title">Dashboard Settings & Customization</h2>
-        <button class="modal-close-btn" id="close-settings-modal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="input-field-group">
-          <label class="input-label">Your Name</label>
-          <input type="text" id="setting-user-name" class="custom-input" placeholder="Miles">
-        </div>
-        
-        <div class="input-field-group">
-          <label class="input-label">Calendar Feed URLs (.ics), one per line</label>
-          <textarea id="setting-ical-url" class="custom-textarea" rows="3" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"></textarea>
-          <span class="field-help">First line is labeled Work, second Personal. Stored only in this browser, never in the repo.</span>
-        </div>
-
-        <div class="input-field-group">
-          <label class="input-label">Weather Location (City or Zip)</label>
-          <input type="text" id="setting-weather-city" class="custom-input" placeholder="e.g. Denver, CO or London">
-          <span class="field-help">Leave blank to use automatic browser geolocation.</span>
-        </div>
-
-        <div class="input-field-group">
-          <label class="input-label">Custom RSS News Feed URL</label>
-          <input type="url" id="setting-custom-rss" class="custom-input" placeholder="https://feeds.feedburner.com/...">
-        </div>
-
-        <hr class="divider">
-
-        <div class="settings-backup-section">
-          <h3>Data Backup & Restore</h3>
-          <p>Export your notes, bookmarks, and settings as a JSON file, or restore from a backup.</p>
-          <div class="backup-actions">
-            <button class="btn btn-outline btn-sm" id="export-data-btn">📥 Export Backup JSON</button>
-            <label class="btn btn-outline btn-sm" for="import-data-file">
-              📤 Import Backup JSON
-              <input type="file" id="import-data-file" accept=".json" style="display:none;">
-            </label>
-            <button class="btn btn-danger-outline btn-sm" id="reset-data-btn">⚠️ Reset All Data</button>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" id="save-settings-btn">Save Preferences</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- COMMAND PALETTE MODAL (CMD + K) -->
-  <div class="modal-overlay command-palette-overlay" id="command-palette-modal">
-    <div class="command-palette-card glass-card">
-      <div class="command-search-header">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="command-palette-input" class="command-input" placeholder="Type a command, search news, or jump to bookmarks..." autocomplete="off">
-        <kbd class="esc-kbd">ESC</kbd>
-      </div>
-      <div class="command-results-list" id="command-palette-results">
-        <!-- Dynamic search results populated by JS -->
-      </div>
-      <div class="command-footer">
-        <span>Use <kbd>↑</kbd> <kbd>↓</kbd> to navigate • <kbd>↵</kbd> to select • <kbd>ESC</kbd> to exit</span>
-      </div>
-    </div>
-  </div>
-
-  <script src="app.js"></script>
+    </form>
+  </dialog>
 </body>
 </html>
