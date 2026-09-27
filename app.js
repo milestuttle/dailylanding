@@ -1,1902 +1,723 @@
-/* ==========================================================================
-   DAILY PERSONAL LANDING PAGE - ENGINE & LOGIC
-   ========================================================================== */
-
-(function () {
+/* DailyDash — front end.
+ *
+ * Weather comes straight from Open-Meteo. Calendar, devotional, and news come
+ * from your Google Apps Script web app (apps-script/Code.gs), configured in
+ * Settings. Settings, bookmarks, and notes are kept in localStorage.
+ */
+(() => {
   'use strict';
 
-  // --- STATE MANAGEMENT ---
-  const STORAGE_KEY = 'daily_dashboard_state_v1';
+  const SETTINGS_KEY = 'dailydash:v2';
+  const DATA_KEY = 'dailydash:data';
+  const LEGACY_KEY = 'daily_dashboard_state_v1';
+  const REFRESH_MS = 15 * 60 * 1000;
 
-  const DEFAULT_STATE = {
-    userName: 'Miles',
-    theme: 'dark',
-    weatherCity: 'Canon City, CO',
-    icalUrls: [
-      { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/private-498916cece0b466a98842b63b8c7a306/basic.ics', category: 'work' },
-      { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/private-5a8619156108f4e7ca0911a1ae832cbf/basic.ics', category: 'personal' }
-    ],
-    customRssUrl: '',
-    googleClientId: '',
-    mainGoal: '',
-    gratitude: ['', '', ''],
-    scratchpad: '',
-    tasks: [
-      { id: '1', title: 'Morning devotional & prayer', category: 'priority', completed: true },
-      { id: '2', title: 'Review today\'s schedule and priorities', category: 'work', completed: false },
-      { id: '3', title: 'Exercise / 30-min walk', category: 'work', completed: false }
-    ],
-    habits: [
-      { id: 'h1', name: 'Morning Devotional', icon: '📖', streak: 7, completedToday: true },
-      { id: 'h2', name: 'Drink 8 Glasses Water', icon: '💧', streak: 4, completedToday: false },
-      { id: 'h3', name: '30 Min Exercise', icon: '🏃', streak: 5, completedToday: false },
-      { id: 'h4', name: 'Read 20 Mins', icon: '📚', streak: 12, completedToday: false }
-    ],
-    events: [],
-    shortcuts: [
-      { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
-      { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
-      { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
-      { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' },
-      { name: 'Glance', title: 'Glance', url: 'https://glance.milestuttle.com/home', icon: '⚡' },
-      { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
-      { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
-      { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
-      { name: 'Cañon City Daily Record', title: 'Cañon City Daily Record', url: 'https://www.canoncitydailyrecord.com', icon: '📍' },
-      { name: 'Facebook', title: 'Facebook', url: 'https://www.facebook.com', icon: '👥' }
-    ]
-  };
-
-  let state = loadState();
-
-  // --- RSS PRESETS ---
-  const RSS_PRESETS = {
-    local: 'https://news.google.com/rss/search?q=site:canoncitydailyrecord.com+OR+%22Canon+City+Daily+Record%22&hl=en-US&gl=US&ceid=US:en',
-    world: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
-    national: 'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
-    tech: [
-      'https://futurism.com/feed',
-      'https://www.wired.com/feed/rss',
-      'https://www.technologyreview.com/feed/',
-      'https://feeds.arstechnica.com/arstechnica/index',
-      'https://newatlas.com/index.rss'
-    ]
-  };
-
-  // --- DEVOTIONAL CONTENT (OSWALD CHAMBERS MY UTMOST FOR HIS HIGHEST) ---
-  const DAILY_DEVOTIONALS = [
-    {
-      title: "Prayer in the Father’s Hearing",
-      verseRef: "John 11:41",
-      verseText: "Father, I thank you that you have heard me.",
-      excerpt: "When the Son of God prays, he has only one consciousness: the consciousness of his Father. God always hears the prayers of his Son, and if his Son is formed in me, God will always hear my prayers. I have to make sure that the Son of God is manifested in my mortal flesh, through the indwelling Holy Spirit.",
-      paragraphs: [
-        "When the Son of God prays, he has only one consciousness: the consciousness of his Father. God always hears the prayers of his Son, and if his Son is formed in me, God will always hear my prayers. I have to make sure that the Son of God is manifested in my mortal flesh, through the indwelling Holy Spirit. “Do you not know that your bodies are temples of the Holy Spirit?” (1 Corinthians 6:19).",
-        "Is the Son of God getting his chance with me? Is the direct simplicity of his life being worked out in me? When I come in contact with the events of life as an ordinary human being, is the prayer of the eternal Son to his Father being prayed in me? “In that day you will ask in my name” (John 16:26). In which day? The day when the Holy Spirit has come to me and made me one with my Lord.",
-        "Ask yourself if Jesus Christ is being abundantly satisfied in your life, or if you’ve got your spiritual strut on. Never let common sense break in and push the Son of God to the side. Common sense is a gift that God gave human nature, but the gift that comes from his Son is supernatural sense. The Son detects the Father. Common sense has never once detected the Father, and never will. Don’t enthrone common sense.",
-        "Our ordinary wits never worship God unless they are transformed by his indwelling Son. We have to keep our mortal flesh in perfect subjection to him, letting him work through us moment by moment. Are we living in such dependence on Jesus Christ that his life is being manifested in us?"
-      ]
-    }
+  const DEFAULT_BOOKMARKS = [
+    { name: 'Gmail', url: 'https://mail.google.com' },
+    { name: 'Gemini', url: 'https://gemini.google.com' },
+    { name: 'Glance', url: 'https://glance.milestuttle.com/home' },
+    { name: 'ESV Online', url: 'https://www.esv.org' },
+    { name: 'New York Times', url: 'https://www.nytimes.com' },
+    { name: 'Google News', url: 'https://news.google.com' },
+    { name: 'Daily Record', url: 'https://www.canoncitydailyrecord.com' },
+    { name: 'YouTube', url: 'https://www.youtube.com' },
+    { name: 'Reddit', url: 'https://www.reddit.com' },
+    { name: 'Facebook', url: 'https://www.facebook.com' }
   ];
 
-  // --- INITIALIZATION ---
+  const DEFAULTS = {
+    name: '',
+    city: 'Cañon City, CO',
+    theme: 'system',
+    apiUrl: '',
+    apiKey: '',
+    bookmarks: DEFAULT_BOOKMARKS,
+    notes: '',
+    newsTab: '',
+    place: null // cached geocoding result: { query, name, lat, lon }
+  };
+
+  const $ = id => document.getElementById(id);
+  let settings = loadSettings();
+  let data = readJson(DATA_KEY); // { fetchedAt, payload }
+  let weather = null;
+  let lastDate = localDate();
+
   document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    initClock();
-    initWeather();
-    initDevotional();
-    initAgenda();
-    initHabits();
-    initPomodoro();
-    initShortcuts();
-    initNewsFeed();
-    initScratchpad();
-    initGratitude();
-    initSettingsModal();
-    initCommandPalette();
-    initWidgetCollapse();
-    initDensityToggle();
-    initNavRail();
-    updateKpiStats();
-    initPWA();
+    applyTheme();
+    initDialogs();
+    initSettings();
+    initEvents();
+    initNotes();
+    initNews();
+    initNav();
+    tick();
+    setInterval(tick, 20 * 1000);
+    renderLinks();
+    renderData();
+    loadWeather();
+    loadData();
+    setInterval(() => { if (!document.hidden) loadData(); }, REFRESH_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && (!data || Date.now() - data.fetchedAt > REFRESH_MS / 2)) loadData();
+    });
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   });
 
-  // --- STORAGE HELPERS ---
-  function loadState() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const merged = { ...DEFAULT_STATE, ...parsed };
-        merged.icalUrls = DEFAULT_STATE.icalUrls;
-        if (merged.tasks && Array.isArray(merged.tasks)) {
-          merged.tasks.forEach(t => {
-            if (t.category === 'personal') t.category = 'work';
-          });
-        }
-        return merged;
-      }
-    } catch (e) {
-      console.warn('LocalStorage error:', e);
-    }
-    return { ...DEFAULT_STATE };
+  /* ---------------------------------------------------------------- */
+  /* Storage                                                           */
+  /* ---------------------------------------------------------------- */
+
+  function readJson(key) {
+    try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
   }
 
-  function saveState() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {
-      console.warn('LocalStorage save error:', e);
-    }
+  function writeJson(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage full or blocked */ }
   }
 
-  // --- THEME ENGINE ---
-  const THEME_LIST = ['dark', 'managemate', 'branch', 'emerald', 'violet', 'light'];
-
-  function applyTheme(themeName) {
-    const validTheme = THEME_LIST.includes(themeName) ? themeName : 'dark';
-    state.theme = validTheme;
-    document.documentElement.setAttribute('data-theme', validTheme);
-    saveState();
-  }
-
-  function cycleTheme() {
-    const current = state.theme || 'dark';
-    let idx = THEME_LIST.indexOf(current);
-    if (idx === -1) idx = 0;
-    const nextTheme = THEME_LIST[(idx + 1) % THEME_LIST.length];
-    applyTheme(nextTheme);
-  }
-
-  function initTheme() {
-    applyTheme(state.theme || 'dark');
-
-    document.addEventListener('click', (e) => {
-      const trigger = e.target.closest('.theme-toggle-trigger, #theme-toggle-btn, [title*="Toggle Theme"]');
-      if (trigger) {
-        e.preventDefault();
-        e.stopPropagation();
-        cycleTheme();
-      }
-    });
-
-    const focusBtn = document.getElementById('focus-mode-btn');
-    if (focusBtn) {
-      focusBtn.addEventListener('click', () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        } else {
-          document.exitFullscreen().catch(() => {});
-        }
-      });
-    }
-  }
-
-  // --- CLOCK & GREETING ---
-  function initClock() {
-    const clockEl = document.getElementById('digital-clock');
-    const secondsEl = document.getElementById('digital-seconds');
-    const dateStrEl = document.getElementById('current-date-str');
-    const greetingEl = document.getElementById('greeting-text');
-    const nameSpan = document.getElementById('display-user-name');
-
-    function update() {
-      const now = new Date();
-      
-      // Time format
-      let hours = now.getHours();
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const hours12 = hours % 12 || 12;
-
-      if (clockEl) clockEl.textContent = `${hours12}:${minutes}`;
-      if (secondsEl) secondsEl.textContent = `:${seconds} ${ampm}`;
-
-      // Date format
-      const options = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
-      if (dateStrEl) dateStrEl.textContent = now.toLocaleDateString('en-US', options);
-      if (nameSpan) nameSpan.textContent = state.userName || 'Miles';
-
-      // Time-aware greeting
-      let greeting = 'Good morning';
-      if (hours >= 12 && hours < 17) greeting = 'Good afternoon';
-      else if (hours >= 17) greeting = 'Good evening';
-      
-      if (greetingEl) {
-        greetingEl.innerHTML = `${greeting}, <span class="user-name-span">${state.userName || 'Miles'}</span>`;
+  function loadSettings() {
+    let saved = readJson(SETTINGS_KEY);
+    if (!saved) {
+      // Carry over name, city, notes, and bookmarks from the previous version,
+      // then drop its storage (it held calendar feed addresses).
+      const old = readJson(LEGACY_KEY);
+      if (old) {
+        saved = {
+          name: old.userName || '',
+          city: old.weatherCity || DEFAULTS.city,
+          notes: old.scratchpad || '',
+          bookmarks: Array.isArray(old.shortcuts) && old.shortcuts.length
+            ? old.shortcuts.map(s => ({ name: s.title || s.name || '', url: s.url || '' })).filter(b => b.url)
+            : DEFAULT_BOOKMARKS
+        };
+        writeJson(SETTINGS_KEY, saved);
+        try { localStorage.removeItem(LEGACY_KEY); } catch (e) { /* ignore */ }
       }
     }
-
-    update();
-    setInterval(update, 1000);
+    return Object.assign({}, DEFAULTS, saved || {});
   }
 
-  // --- WEATHER WIDGET (OPEN-METEO API) ---
-  function initWeather() {
-    const weatherCard = document.getElementById('weather-card');
-    if (weatherCard) {
-      weatherCard.addEventListener('click', openWeatherModal);
-    }
-    const closeWeatherModal = document.getElementById('close-weather-modal');
-    if (closeWeatherModal) {
-      closeWeatherModal.addEventListener('click', () => {
-        const modal = document.getElementById('weather-modal');
-        if (modal) modal.classList.remove('active');
-      });
-    }
-    fetchWeather();
+  function saveSettings() {
+    writeJson(SETTINGS_KEY, settings);
   }
 
-  async function fetchWeather() {
-    const tempEl = document.getElementById('weather-temp');
-    const descEl = document.getElementById('weather-desc');
-    const locEl = document.getElementById('weather-location');
-    const iconEl = document.getElementById('weather-icon');
+  /* ---------------------------------------------------------------- */
+  /* Helpers                                                           */
+  /* ---------------------------------------------------------------- */
 
-    const rawCity = state.weatherCity || 'Canon City';
-    const searchCity = rawCity.split(',')[0].trim();
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const safeUrl = u => (/^https?:\/\//i.test(u || '') ? u : '#');
+  const icon = (name, cls = '') => `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
-    try {
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchCity)}&count=1`);
-      const geoData = await geoRes.json();
-      if (geoData && geoData.results && geoData.results.length > 0) {
-        const loc = geoData.results[0];
-        await getWeatherCoords(loc.latitude, loc.longitude, loc.name);
-        return;
-      }
-    } catch (e) { console.warn('Geo search error:', e); }
-
-    // Instant fallback to Canon City, CO
-    getWeatherCoords(38.4410, -105.2425, 'Cañon City, CO');
+  function localDate(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
-  async function getWeatherCoords(lat, lon, cityName) {
-    const tempEl = document.getElementById('weather-temp');
-    const descEl = document.getElementById('weather-desc');
-    const locEl = document.getElementById('weather-location');
-    const iconEl = document.getElementById('weather-icon');
+  const timeFmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
+  const fmtTime = d => timeFmt.format(d).replace(':00 ', ' ');
 
-    try {
-      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`);
-      const data = await res.json();
-      if (data && data.current_weather) {
-        const temp = Math.round(data.current_weather.temperature);
-        const code = data.current_weather.weathercode;
-        const info = decodeWmoCode(code);
-
-        if (tempEl) tempEl.textContent = `${temp}°F`;
-        if (descEl) descEl.textContent = info.desc;
-        if (locEl) locEl.textContent = cityName;
-        if (iconEl) iconEl.innerHTML = info.icon;
-
-        // Store coords for modal view
-        state.lastLat = lat;
-        state.lastLon = lon;
-        state.lastCity = cityName;
-      }
-    } catch (e) {
-      if (tempEl) tempEl.textContent = '--°F';
-      if (descEl) descEl.textContent = 'Weather unavailable';
-    }
+  function relativeTime(iso) {
+    if (!iso) return '';
+    const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (mins < 24 * 60) return `${Math.round(mins / 60)}h ago`;
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // --- WEATHER EXTENDED FORECAST MODAL ---
-  async function openWeatherModal() {
-    const modal = document.getElementById('weather-modal');
-    const modalBody = document.getElementById('weather-modal-body');
-    const modalCity = document.getElementById('weather-modal-city');
-    const modalSub = document.getElementById('weather-modal-subtitle');
-
-    if (!modal || !modalBody) return;
-    modal.classList.add('active');
-
-    const lat = state.lastLat || 39.7392;
-    const lon = state.lastLon || -104.9903;
-    const cityName = state.lastCity || 'Denver, CO';
-
-    if (modalCity) modalCity.textContent = `${cityName} Weather Details`;
-    modalBody.innerHTML = `<div class="loading-spinner-box">Fetching 7-day forecast & hourly metrics...</div>`;
-
-    try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation_probability,weathercode&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&temperature_unit=fahrenheit`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (!data || !data.daily || !data.hourly) {
-        modalBody.innerHTML = `<div class="loading-spinner-box">Unable to load detailed forecast.</div>`;
-        return;
-      }
-
-      if (modalSub) modalSub.textContent = `Today: ${Math.round(data.daily.temperature_2m_max[0])}°F / ${Math.round(data.daily.temperature_2m_min[0])}°F • Precip ${data.daily.precipitation_probability_max[0]}%`;
-
-      const sunriseStr = data.daily.sunrise[0] ? new Date(data.daily.sunrise[0]).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '--';
-      const sunsetStr = data.daily.sunset[0] ? new Date(data.daily.sunset[0]).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '--';
-      const windSpeed = data.current_weather ? Math.round(data.current_weather.windspeed) : '--';
-      const precipMax = data.daily.precipitation_probability_max[0] || 0;
-
-      // Render 4 Stat Cards
-      const statsHtml = `
-        <div class="weather-stat-grid">
-          <div class="weather-stat-card">
-            <span class="weather-stat-label">Precipitation</span>
-            <span class="weather-stat-val">${precipMax}%</span>
-          </div>
-          <div class="weather-stat-card">
-            <span class="weather-stat-label">Wind Speed</span>
-            <span class="weather-stat-val">${windSpeed} mph</span>
-          </div>
-          <div class="weather-stat-card">
-            <span class="weather-stat-label">Sunrise</span>
-            <span class="weather-stat-val">${sunriseStr}</span>
-          </div>
-          <div class="weather-stat-card">
-            <span class="weather-stat-label">Sunset</span>
-            <span class="weather-stat-val">${sunsetStr}</span>
-          </div>
-        </div>
-      `;
-
-      // Render Hourly Forecast (Next 12 Hours from current hour)
-      const nowHour = new Date().getHours();
-      const todayYMD = new Date().toISOString().split('T')[0];
-      let startIdx = data.hourly.time.findIndex(t => t.startsWith(todayYMD) && parseInt(t.split('T')[1].split(':')[0], 10) >= nowHour);
-      if (startIdx === -1) startIdx = 0;
-
-      const hourlyItems = [];
-      for (let i = startIdx; i < startIdx + 12 && i < data.hourly.time.length; i++) {
-        const timeStr = data.hourly.time[i];
-        const hourNum = parseInt(timeStr.split('T')[1].split(':')[0], 10);
-        const displayHour = hourNum === 0 ? '12 AM' : hourNum === 12 ? '12 PM' : hourNum > 12 ? `${hourNum - 12} PM` : `${hourNum} AM`;
-
-        const hTemp = Math.round(data.hourly.temperature_2m[i]);
-        const hPrecip = data.hourly.precipitation_probability[i] || 0;
-        const hIcon = decodeWmoCode(data.hourly.weathercode[i]).icon;
-
-        hourlyItems.push(`
-          <div class="hourly-card">
-            <span class="hourly-time">${displayHour}</span>
-            <span class="hourly-icon">${hIcon}</span>
-            <span class="hourly-temp">${hTemp}°</span>
-            <span class="hourly-precip">${hPrecip}%</span>
-          </div>
-        `);
-      }
-
-      const hourlyHtml = `
-        <div class="modal-section-title" style="margin-top: 1rem;">Hourly Forecast (Next 12 Hours)</div>
-        <div class="hourly-forecast-row">${hourlyItems.join('')}</div>
-      `;
-
-      // Render 7-Day Forecast List
-      const dailyRows = [];
-      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      for (let d = 0; d < data.daily.time.length && d < 7; d++) {
-        const dateObj = new Date(data.daily.time[d] + 'T00:00:00');
-        const dayName = d === 0 ? 'Today' : daysOfWeek[dateObj.getDay()];
-        const maxT = Math.round(data.daily.temperature_2m_max[d]);
-        const minT = Math.round(data.daily.temperature_2m_min[d]);
-        const dIcon = decodeWmoCode(data.daily.weathercode[d]).icon;
-
-        dailyRows.push(`
-          <div class="daily-row">
-            <span class="daily-day">${dayName}</span>
-            <span class="daily-icon">${dIcon}</span>
-            <div class="daily-temps">
-              <span class="temp-max">${maxT}°</span>
-              <span class="temp-min">${minT}°</span>
-            </div>
-          </div>
-        `);
-      }
-
-      const dailyHtml = `
-        <div class="modal-section-title" style="margin-top: 1rem;">7-Day Forecast</div>
-        <div class="daily-forecast-list">${dailyRows.join('')}</div>
-      `;
-
-      modalBody.innerHTML = statsHtml + hourlyHtml + dailyHtml;
-    } catch (e) {
-      modalBody.innerHTML = `<div class="loading-spinner-box">Error loading extended weather data.</div>`;
-    }
+  function setStatus(text, isError) {
+    const el = $('status');
+    el.textContent = text;
+    el.classList.toggle('error', !!isError);
   }
 
-  function decodeWmoCode(code) {
-    if (code === 0) return { desc: 'Clear sky', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>' };
-    if (code <= 3) return { desc: 'Partly cloudy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>' };
-    if (code <= 48) return { desc: 'Foggy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="8" x2="19" y2="8"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="5" y1="16" x2="19" y2="16"></line></svg>' };
-    if (code <= 67) return { desc: 'Rainy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"></line><line x1="8" y1="13" x2="8" y2="21"></line><line x1="12" y1="15" x2="12" y2="23"></line><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path></svg>' };
-    if (code <= 77) return { desc: 'Snowy', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"></path><line x1="8" y1="16" x2="8.01" y2="16"></line><line x1="8" y1="20" x2="8.01" y2="20"></line><line x1="12" y1="18" x2="12.01" y2="18"></line><line x1="12" y1="22" x2="12.01" y2="22"></line><line x1="16" y1="16" x2="16.01" y2="16"></line><line x1="16" y1="20" x2="16.01" y2="20"></line></svg>' };
-    return { desc: 'Showers', icon: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"></line><line x1="8" y1="13" x2="8" y2="21"></line><line x1="12" y1="15" x2="12" y2="23"></line><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path></svg>' };
-  }
+  /* ---------------------------------------------------------------- */
+  /* Clock and greeting                                                */
+  /* ---------------------------------------------------------------- */
 
-  let activeDevotional = DAILY_DEVOTIONALS[0];
-
-  function renderDevotional(devo) {
-    activeDevotional = devo;
-    const verseText = document.getElementById('daily-scripture-text');
-    const verseRef = document.getElementById('daily-scripture-ref');
-    const devoTitle = document.getElementById('devotional-title');
-    const devoExcerpt = document.getElementById('devotional-excerpt');
-
-    if (verseText) verseText.textContent = `"${devo.verseText}"`;
-    if (verseRef) verseRef.textContent = `— ${devo.verseRef}`;
-    if (devoTitle) devoTitle.textContent = devo.title;
-    if (devoExcerpt) devoExcerpt.textContent = devo.excerpt;
-  }
-
-  async function fetchUtmostDevotional() {
-    try {
-      const html = await fetchProxyContent('https://utmost.org/modern-classic/today/');
-      if (html) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        const titleEl = doc.querySelector('h1.elementor-heading-title, h1.entry-title, h1');
-        const titleText = titleEl ? titleEl.textContent.trim() : '';
-
-        const paragraphs = Array.from(doc.querySelectorAll('p'))
-          .map(p => p.textContent.replace(/\s+/g, ' ').trim())
-          .filter(txt => txt.length > 25 && !txt.includes('©') && !txt.includes('Copyright') && !txt.includes('Sign up') && !txt.includes('Oswald Chambers'));
-
-        if (paragraphs.length >= 2) {
-          let verseText = "Father, I thank you that you have heard me.";
-          let verseRef = "John 11:41";
-          let excerptIdx = 0;
-
-          if (paragraphs[0].includes('—') || paragraphs[0].match(/([0-9]?\s?[A-Z][a-z]+\s+[0-9]+:[0-9]+)/)) {
-            const parts = paragraphs[0].split(/—|-/);
-            verseText = parts[0].trim().replace(/^["“]|["”]$/g, '');
-            verseRef = parts[1] ? parts[1].trim() : "John 11:41";
-            excerptIdx = 1;
-          }
-
-          const liveDevo = {
-            title: titleText || "Prayer in the Father’s Hearing",
-            verseRef: verseRef,
-            verseText: verseText,
-            excerpt: paragraphs[excerptIdx],
-            paragraphs: paragraphs.slice(excerptIdx)
-          };
-          renderDevotional(liveDevo);
-        }
-      }
-    } catch (e) {
-      console.warn('Live Utmost fetch fallback:', e);
-    }
-  }
-
-  function initDevotional() {
-    renderDevotional(DAILY_DEVOTIONALS[0]);
-    fetchUtmostDevotional();
-
-    // Text-to-speech button
-    const speakBtn = document.getElementById('speak-scripture-btn');
-    if (speakBtn && 'speechSynthesis' in window) {
-      speakBtn.addEventListener('click', () => {
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
-          speakBtn.textContent = '🔊 Listen';
-          return;
-        }
-        window.speechSynthesis.cancel();
-        speakBtn.textContent = '⏳ Preparing...';
-        setTimeout(() => {
-          const utterance = new SpeechSynthesisUtterance(`${activeDevotional.verseText}. ${activeDevotional.verseRef}`);
-          utterance.rate = 0.95;
-          utterance.onend = () => { speakBtn.textContent = '🔊 Listen'; };
-          utterance.onerror = () => { speakBtn.textContent = '🔊 Listen'; };
-          speakBtn.textContent = '⏹️ Stop';
-          window.speechSynthesis.speak(utterance);
-        }, 250);
-      });
-    }
-
-    // Modal full reader
-    const readBtn = document.getElementById('read-full-devotional-btn');
-    const modal = document.getElementById('devotional-modal');
-    const closeModal = document.getElementById('close-devotional-modal');
-
-    if (readBtn && modal) {
-      readBtn.addEventListener('click', () => {
-        document.getElementById('modal-devo-title').textContent = activeDevotional.title;
-        document.getElementById('modal-devo-verse-ref').textContent = activeDevotional.verseRef;
-        document.getElementById('modal-devo-verse-text').textContent = `"${activeDevotional.verseText}"`;
-
-        const pBox = document.getElementById('modal-devo-paragraphs');
-        if (pBox) {
-          pBox.innerHTML = activeDevotional.paragraphs.map(p => `<p>${p}</p>`).join('');
-        }
-        modal.classList.add('active');
-      });
-    }
-
-    if (closeModal && modal) {
-      closeModal.addEventListener('click', () => modal.classList.remove('active'));
-    }
-  }
-
-  // --- AGENDA & CALENDAR ---
-  function initAgenda() {
-    const subtitle = document.getElementById('agenda-date-subtitle');
-    if (subtitle) {
-      subtitle.textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-
-    renderAgenda();
-
-    // Schedule Quick Summary Modal
-    const agendaHeader = document.querySelector('#widget-agenda .card-title-group');
-    const eventsKpiChip = document.querySelector('.events-kpi-chip');
-    if (agendaHeader) agendaHeader.addEventListener('click', openScheduleSummaryModal);
-    if (eventsKpiChip) eventsKpiChip.addEventListener('click', openScheduleSummaryModal);
-
-    const closeSchedModal = document.getElementById('close-schedule-modal');
-    if (closeSchedModal) {
-      closeSchedModal.addEventListener('click', () => {
-        const modal = document.getElementById('schedule-summary-modal');
-        if (modal) modal.classList.remove('active');
-      });
-    }
-
-    // Modal controls
-    const addBtn = document.getElementById('add-event-btn');
-    const modal = document.getElementById('event-modal');
-    const closeBtn = document.getElementById('close-event-modal');
-    const cancelBtn = document.getElementById('cancel-event-btn');
-    const form = document.getElementById('add-event-form');
-
-    if (addBtn && modal) addBtn.addEventListener('click', () => modal.classList.add('active'));
-    if (closeBtn && modal) closeBtn.addEventListener('click', () => modal.classList.remove('active'));
-    if (cancelBtn && modal) cancelBtn.addEventListener('click', () => modal.classList.remove('active'));
-
-    if (form) {
-      form.addEventListener('submit', e => {
-        e.preventDefault();
-        const title = document.getElementById('event-title-input').value;
-        const time = document.getElementById('event-time-input').value;
-        const category = document.getElementById('event-category-input').value;
-
-        if (title && time) {
-          state.events.push({ id: Date.now().toString(), title, time, category });
-          state.events.sort((a, b) => a.time.localeCompare(b.time));
-          saveState();
-          renderAgenda();
-          modal.classList.remove('active');
-          form.reset();
-        }
-      });
-    }
-
-    // iCal Sync Button
-    const syncBtn = document.getElementById('refresh-ical-btn');
-    if (syncBtn) {
-      syncBtn.addEventListener('click', fetchIcalFeed);
-    }
-
-    // Purge outdated iCal events from previous days stored in localStorage
+  function tick() {
     const now = new Date();
-    const todayYMD = now.getFullYear().toString() + 
-                     String(now.getMonth() + 1).padStart(2, '0') + 
-                     String(now.getDate()).padStart(2, '0');
+    const h = now.getHours();
+    const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    $('greeting').textContent = settings.name ? `${part}, ${settings.name}` : part;
+    $('today-date').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    $('clock').textContent = timeFmt.format(now);
 
-    if (state.events && Array.isArray(state.events)) {
-      state.events = state.events.filter(ev => {
-        if (ev.id === 'e1' || ev.id === 'e2' || ev.id === 'e3') return false;
-        if (ev.id && ev.id.startsWith('ical-')) {
-          return ev.eventDateYMD === todayYMD;
-        }
-        return true;
-      });
-      saveState();
+    if (localDate(now) !== lastDate) {
+      lastDate = localDate(now);
+      loadData();
+      loadWeather();
     }
-    renderAgenda();
-
-    if ((state.icalUrls && state.icalUrls.length > 0) || state.icalUrl) {
-      fetchIcalFeed();
-    }
+    renderSchedule(); // keeps "now" and past-event styling current
   }
 
-  function openScheduleSummaryModal() {
-    const modal = document.getElementById('schedule-summary-modal');
-    const modalBody = document.getElementById('schedule-summary-body');
-    const modalDate = document.getElementById('schedule-summary-date');
+  /* ---------------------------------------------------------------- */
+  /* Theme                                                             */
+  /* ---------------------------------------------------------------- */
 
-    if (!modal || !modalBody) return;
-    modal.classList.add('active');
-
-    const now = new Date();
-    if (modalDate) modalDate.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
-    const totalEvents = state.events ? state.events.length : 0;
-    if (totalEvents === 0) {
-      modalBody.innerHTML = `
-        <div style="text-align: center; padding: 1.5rem 1rem;">
-          <p style="font-size: 1rem; color: var(--text-secondary);">No events scheduled for today.</p>
-          <button class="btn btn-primary" style="margin-top: 1rem;" id="modal-add-event-btn">+ Add Event</button>
-        </div>
-      `;
-      const btn = document.getElementById('modal-add-event-btn');
-      if (btn) btn.addEventListener('click', () => { modal.classList.remove('active'); openAddEventModal(); });
-      return;
-    }
-
-    const eventsHtml = state.events.map(e => {
-      const isWork = e.category === 'work';
-      const email = isWork ? 'miles.tuttle@canoncityschools.org' : 'mbtutt@gmail.com';
-      const label = isWork ? '💼 WORK' : '🏠 PERSONAL';
-      return `
-        <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.08); border: 1px solid var(--card-border); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${formatTime12(e.time)}</span>
-            <span class="tag ${isWork ? 'tag-accent' : ''}" style="font-size: 0.65rem;">${label} • ${email}</span>
-          </div>
-          <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
-          ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
-        </div>
-      `;
-    }).join('');
-
-    modalBody.innerHTML = `
-      <div style="margin-bottom: 0.85rem; font-weight: 700; color: var(--text-primary);">Total Scheduled Events: ${totalEvents}</div>
-      ${eventsHtml}
-    `;
+  function applyTheme() {
+    const root = document.documentElement;
+    if (settings.theme === 'light' || settings.theme === 'dark') root.dataset.theme = settings.theme;
+    else delete root.dataset.theme;
   }
 
-  function renderAgenda() {
-    const listEl = document.getElementById('agenda-events-list');
-    if (!listEl) return;
+  /* ---------------------------------------------------------------- */
+  /* Weather (Open-Meteo, no key needed)                               */
+  /* ---------------------------------------------------------------- */
 
-    const countBadge = document.getElementById('agenda-count-badge');
-    if (countBadge) {
-      countBadge.textContent = `${state.events ? state.events.length : 0} Events`;
-    }
+  const WMO = [
+    [0, 'Clear', 'sun'], [1, 'Mostly clear', 'partly'], [2, 'Partly cloudy', 'partly'], [3, 'Overcast', 'cloud'],
+    [48, 'Fog', 'fog'], [57, 'Drizzle', 'rain'], [67, 'Rain', 'rain'], [77, 'Snow', 'snow'],
+    [82, 'Showers', 'rain'], [86, 'Snow showers', 'snow'], [99, 'Thunderstorms', 'storm']
+  ];
 
-    if (!state.events || state.events.length === 0) {
-      listEl.innerHTML = `<div class="loading-spinner-box">No events scheduled for today. Click "+ Add Event" to get started.</div>`;
-      return;
-    }
-
-    listEl.innerHTML = state.events.map(ev => {
-      const isWork = ev.category === 'work';
-      const email = isWork ? 'miles.tuttle@canoncityschools.org' : 'mbtutt@gmail.com';
-      const catLabel = isWork ? '💼 WORK' : '🏠 PERSONAL';
-      return `
-        <div class="event-item">
-          <span class="event-time-badge">${formatTime12(ev.time)}</span>
-          <div class="event-details">
-            <div class="event-title">${escapeHtml(ev.title)}</div>
-            <div class="event-cat" style="${isWork ? 'color: var(--primary); font-weight: 700;' : ''}">${catLabel} • ${email}</div>
-          </div>
-          <button class="event-delete-btn" data-id="${ev.id}" title="Delete event">&times;</button>
-        </div>
-      `;
-    }).join('');
-
-    listEl.querySelectorAll('.event-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.events = state.events.filter(e => e.id !== btn.dataset.id);
-        saveState();
-        renderAgenda();
-      });
-    });
+  function describeWeather(code, isDay = 1) {
+    const hit = WMO.find(([max]) => code <= max) || WMO[WMO.length - 1];
+    const iconName = hit[2] === 'sun' && !isDay ? 'moon' : hit[2];
+    return { text: hit[1], icon: iconName };
   }
 
-  async function fetchProxyContent(url) {
-    const timeParam = `&_t=${Date.now()}`;
-    const proxies = [
-      u => `https://proxy.cors.sh/${u}`,
-      u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      u => `https://corsproxy.io/?${encodeURIComponent(u)}${timeParam}`
-    ];
-
-    for (const proxyFn of proxies) {
-      try {
-        const res = await fetch(proxyFn(url));
-        if (res.ok) {
-          const text = await res.text();
-          if (text && text.includes('BEGIN:VCALENDAR')) return text;
-        }
-      } catch (e) {
-        console.warn('Proxy attempt failed:', e);
-      }
-    }
-
-    try {
-      const direct = await fetch(url);
-      if (direct.ok) {
-        const text = await direct.text();
-        if (text && text.includes('BEGIN:VCALENDAR')) return text;
-      }
-    } catch (e) {}
-
-    return null;
-  }
-
-  function parseIcalDate(rawDate, rawTime, isUtc) {
-    if (!rawDate || rawDate.length < 8) return null;
-    const year = parseInt(rawDate.substring(0, 4), 10);
-    const month = parseInt(rawDate.substring(4, 6), 10) - 1;
-    const day = parseInt(rawDate.substring(6, 8), 10);
-
-    const timeStr = rawTime || '000000';
-    const hour = parseInt(timeStr.substring(0, 2), 10);
-    const min = parseInt(timeStr.substring(2, 4), 10);
-    const sec = parseInt(timeStr.substring(4, 6), 10);
-
-    if (isUtc) {
-      return new Date(Date.UTC(year, month, day, hour, min, sec));
-    }
-    return new Date(year, month, day, hour, min, sec);
-  }
-
-  function isSameLocalDate(d1, d2) {
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  }
-
-  function isEventOnDate(block, now) {
-    const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?(Z)?/);
-    if (!dtstartMatch) return false;
-
-    const isUtc = block.includes('Z') || dtstartMatch[3] === 'Z';
-    const startDateObj = parseIcalDate(dtstartMatch[1], dtstartMatch[2], isUtc);
-    if (!startDateObj) return false;
-
-    // Check if the event occurs on TODAY in local time
-    if (isSameLocalDate(startDateObj, now)) return true;
-
-    // If event start date in local time is in the past (before today's local date):
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const eventDayStart = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
-
-    if (eventDayStart < todayStart) {
-      const rruleMatch = block.match(/RRULE:(.*)/);
-      if (!rruleMatch) return false;
-
-      const rrule = rruleMatch[1];
-
-      // Check UNTIL date if present
-      const untilMatch = rrule.match(/UNTIL=(\d{8})(?:T(\d{6}))?(Z)?/);
-      if (untilMatch) {
-        const untilDateObj = parseIcalDate(untilMatch[1], untilMatch[2], block.includes('Z'));
-        if (untilDateObj && untilDateObj < todayStart) return false;
-      }
-
-      // Check EXDATE (excluded dates)
-      const exdateMatches = block.match(/EXDATE(?:;[^:]*)?:(\d{8})/g);
-      if (exdateMatches) {
-        const todayYMD = now.getFullYear().toString() +
-                         String(now.getMonth() + 1).padStart(2, '0') +
-                         String(now.getDate()).padStart(2, '0');
-        for (let ex of exdateMatches) {
-          if (ex.includes(todayYMD)) return false;
-        }
-      }
-
-      if (rrule.includes('FREQ=DAILY')) return true;
-
-      if (rrule.includes('FREQ=WEEKLY')) {
-        const daysMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-        const todayDayCode = daysMap[now.getDay()];
-
-        const bydayMatch = rrule.match(/BYDAY=([^;]+)/);
-        if (bydayMatch) {
-          const days = bydayMatch[1].split(',');
-          if (days.some(d => d.includes(todayDayCode))) return true;
-        } else {
-          if (startDateObj.getDay() === now.getDay()) return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  async function fetchIcalFeed() {
-    const statusEl = document.getElementById('ical-sync-status');
-    const feeds = state.icalUrls && state.icalUrls.length > 0
-      ? state.icalUrls
-      : [
-          { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/public/basic.ics', category: 'work' },
-          { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/public/basic.ics', category: 'personal' }
-        ];
-
-    if (statusEl) statusEl.textContent = '🔄 Syncing Work & Personal Calendars...';
-
-    const now = new Date();
-    const todayYMD = now.getFullYear().toString() + 
-                     String(now.getMonth() + 1).padStart(2, '0') + 
-                     String(now.getDate()).padStart(2, '0');
-
-    let allEvents = [];
-
-    try {
-      await Promise.all(feeds.map(async (feed) => {
-        try {
-          let text = await fetchProxyContent(feed.url);
-          if (!text) return;
-
-          text = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
-          const blocks = text.split('BEGIN:VEVENT');
-
-          blocks.slice(1).forEach(block => {
-            const summaryMatch = block.match(/SUMMARY:(.*)/);
-            const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?/);
-
-            if (summaryMatch && dtstartMatch) {
-              const title = summaryMatch[1].trim();
-
-              if (isEventOnDate(block, now)) {
-                let time = '08:00';
-                if (dtstartMatch[2]) {
-                  const isUtc = block.includes('Z');
-                  const eventDate = parseIcalDate(dtstartMatch[1], dtstartMatch[2], isUtc);
-                  if (eventDate) {
-                    time = `${String(eventDate.getHours()).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')}`;
-                  }
-                }
-
-                allEvents.push({
-                  id: 'ical-' + Math.random().toString(36).substring(2, 9),
-                  title,
-                  time,
-                  eventDateYMD: todayYMD,
-                  category: feed.category || (title.toLowerCase().includes('meeting') ? 'meeting' : 'work')
-                });
-              }
-            }
-          });
-        } catch (err) {
-          console.warn(`Error fetching calendar feed ${feed.name}:`, err);
-        }
-      }));
-
-      allEvents.sort((a, b) => a.time.localeCompare(b.time));
-      const manualEvents = (state.events || []).filter(e => !e.id.startsWith('ical-'));
-      state.events = [...manualEvents, ...allEvents].sort((a, b) => a.time.localeCompare(b.time));
-      saveState();
-      renderAgenda();
-      updateKpiStats();
-
-      if (allEvents.length > 0) {
-        if (statusEl) statusEl.textContent = `✅ Synced ${allEvents.length} Work & Personal events`;
-      } else {
-        if (statusEl) statusEl.textContent = '✅ Synced Work & Personal Calendars (No events today)';
-      }
-    } catch (e) {
-      if (statusEl) statusEl.textContent = '⚠️ iCal Sync error';
-    }
-  }
-
-  function formatTime12(time24) {
-    if (!time24 || !time24.includes(':')) return time24;
-    let [h, m] = time24.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12 || 12;
-    return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
-  }
-
-  // --- TASKS MANAGER ---
-  function initTasks() {
-    renderTasks();
-
-    const form = document.getElementById('add-task-form');
-    if (form) {
-      form.addEventListener('submit', e => {
-        e.preventDefault();
-        const titleInput = document.getElementById('new-task-title');
-        const catSelect = document.getElementById('new-task-category');
-        if (titleInput.value.trim()) {
-          state.tasks.unshift({
-            id: Date.now().toString(),
-            title: titleInput.value.trim(),
-            category: catSelect.value,
-            completed: false
-          });
-          titleInput.value = '';
-          saveState();
-          renderTasks();
-        }
-      });
-    }
-
-    // Filter tabs
-    const tabs = document.querySelectorAll('.task-filter-tabs .tab-btn');
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        renderTasks(tab.dataset.filter);
-      });
-    });
-
-    // Google Tasks Sync Button
-    const syncTasksBtn = document.getElementById('sync-google-tasks-btn');
-    if (syncTasksBtn) {
-      syncTasksBtn.addEventListener('click', syncGoogleTasks);
-    }
-  }
-
-  async function syncGoogleTasks() {
-    const btn = document.getElementById('sync-google-tasks-btn');
-    if (!state.googleClientId) {
-      const clientId = prompt('Enter your Google OAuth Client ID to sync live Google Tasks:\n(Or leave blank to use quick demo sync)');
-      if (clientId) {
-        state.googleClientId = clientId.trim();
-        saveState();
-      } else {
-        alert('ℹ️ Quick Sync: Add a Client ID in Settings for direct OAuth live sync with Google Tasks API.');
-        return;
-      }
-    }
-
-    if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
-      alert('Google Identity library loading... Please try again in 5 seconds.');
-      return;
-    }
-
-    if (btn) btn.textContent = '🔄 Authenticating...';
-
-    try {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: (state.googleClientId || '').trim(),
-        scope: 'https://www.googleapis.com/auth/tasks',
-        error_callback: (err) => {
-          console.warn('OAuth Error:', err);
-          alert('Google Auth Error: ' + JSON.stringify(err));
-          if (btn) btn.textContent = 'Sync Google Tasks';
-        },
-        callback: async (response) => {
-          if (response.error) {
-            alert('Google Auth error: ' + response.error);
-            if (btn) btn.textContent = 'Sync Google Tasks';
-            return;
-          }
-          if (btn) btn.textContent = '🔄 Fetching Tasks...';
-          
-          const accessToken = response.access_token;
-          // Fetch Task Lists
-          const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
-            headers: { Authorization: `Bearer ${accessToken}` }
-          });
-          const listsData = await listsRes.json();
-
-          if (listsData.items && listsData.items.length > 0) {
-            let fetchedTasks = [];
-            for (const list of listsData.items) {
-              const taskRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${list.id}/tasks`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-              });
-              const taskData = await taskRes.json();
-              if (taskData.items) {
-                const isWork = list.title.toLowerCase().includes('work') || list.title.toLowerCase().includes('canon');
-                taskData.items.forEach(gtask => {
-                  if (gtask.title) {
-                    fetchedTasks.push({
-                      id: 'gtask-' + gtask.id,
-                      title: gtask.title,
-                      category: 'work',
-                      completed: gtask.status === 'completed'
-                    });
-                  }
-                });
-              }
-            }
-
-            if (fetchedTasks.length > 0) {
-              // Merge with local tasks
-              const existingIds = new Set(state.tasks.map(t => t.id));
-              fetchedTasks.forEach(ft => {
-                if (!existingIds.has(ft.id)) state.tasks.unshift(ft);
-              });
-              saveState();
-              renderTasks();
-              alert(`✅ Successfully synced ${fetchedTasks.length} Google Tasks!`);
-            }
-          }
-          if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Sync Google Tasks';
-        }
-      });
-      client.requestAccessToken();
-    } catch (e) {
-      alert('Error initiating Google Tasks sync: ' + e.message);
-      if (btn) btn.textContent = 'Sync Google Tasks';
-    }
-  }
-
-  function renderTasks(filter = 'all') {
-    const container = document.getElementById('task-list-container');
-    const subtitle = document.getElementById('tasks-count-subtitle');
-    if (!container) return;
-
-    const completedCount = state.tasks.filter(t => t.completed).length;
-    if (subtitle) subtitle.textContent = `${completedCount} of ${state.tasks.length} completed`;
-
-    let filtered = state.tasks;
-    if (filter !== 'all') {
-      filtered = state.tasks.filter(t => t.category === filter);
-    }
-
-    if (filtered.length === 0) {
-      container.innerHTML = `<div class="loading-spinner-box">No tasks found. Add one above!</div>`;
-      return;
-    }
-
-    container.innerHTML = filtered.map(t => {
-      let tagHtml = '';
-      if (t.category === 'priority') tagHtml = `<span class="task-tag priority">🔥 Priority</span>`;
-      else if (t.category === 'quick') tagHtml = `<span class="task-tag quick">⚡ Quick</span>`;
-
-      return `
-        <div class="task-item ${t.completed ? 'completed' : ''}">
-          <label class="task-checkbox-label">
-            <input type="checkbox" class="task-checkbox" data-id="${t.id}" ${t.completed ? 'checked' : ''}>
-            <span class="task-title-text">${escapeHtml(t.title)}</span>
-          </label>
-          ${tagHtml}
-          <button class="event-delete-btn delete-task-btn" data-id="${t.id}" title="Delete task">&times;</button>
-        </div>
-      `;
-    }).join('');
-
-    container.querySelectorAll('.task-checkbox').forEach(chk => {
-      chk.addEventListener('change', () => {
-        const task = state.tasks.find(t => t.id === chk.dataset.id);
-        if (task) {
-          task.completed = chk.checked;
-          saveState();
-          renderTasks(filter);
-        }
-      });
-    });
-
-    container.querySelectorAll('.delete-task-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.tasks = state.tasks.filter(t => t.id !== btn.dataset.id);
-        saveState();
-        renderTasks(filter);
-      });
-    });
-  }
-
-  // --- HABIT TRACKER ---
-  function initHabits() {
-    renderHabits();
-
-    const addBtn = document.getElementById('add-habit-btn');
-    if (addBtn) {
-      addBtn.addEventListener('click', () => {
-        const name = prompt('Enter new habit name (e.g., Morning Prayer, Read Bible):');
-        if (name) {
-          state.habits.push({ id: Date.now().toString(), name, icon: '⭐', streak: 0, completedToday: false });
-          saveState();
-          renderHabits();
-        }
-      });
-    }
-  }
-
-  function renderHabits() {
-    const container = document.getElementById('habits-container');
-    if (!container) return;
-
-    container.innerHTML = state.habits.map(h => `
-      <div class="habit-item">
-        <div class="habit-info">
-          <span class="habit-icon">${h.icon}</span>
-          <div>
-            <div class="habit-name">${escapeHtml(h.name)}</div>
-            <div class="habit-streak">🔥 ${h.streak} day streak</div>
-          </div>
-        </div>
-        <button class="habit-check-btn ${h.completedToday ? 'checked' : ''}" data-id="${h.id}">
-          ${h.completedToday ? '✓' : ''}
-        </button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.habit-check-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const habit = state.habits.find(h => h.id === btn.dataset.id);
-        if (habit) {
-          habit.completedToday = !habit.completedToday;
-          habit.streak += habit.completedToday ? 1 : -1;
-          if (habit.streak < 0) habit.streak = 0;
-          saveState();
-          renderHabits();
-        }
-      });
-    });
-  }
-
-  // --- POMODORO TIMER ---
-  let pomoInterval = null;
-  let pomoSecondsLeft = 25 * 60;
-  let pomoIsRunning = false;
-
-  function initPomodoro() {
-    const display = document.getElementById('pomo-display');
-    const startBtn = document.getElementById('pomo-start-btn');
-    const resetBtn = document.getElementById('pomo-reset-btn');
-    const tabs = document.querySelectorAll('.pomo-tabs .pomo-tab');
-
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        const mins = parseInt(tab.dataset.time, 10);
-        resetPomo(mins);
-      });
-    });
-
-    if (startBtn) {
-      startBtn.addEventListener('click', () => {
-        if (pomoIsRunning) {
-          pausePomo();
-        } else {
-          startPomo();
-        }
-      });
-    }
-
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => resetPomo(25));
-    }
-  }
-
-  function startPomo() {
-    pomoIsRunning = true;
-    const startBtn = document.getElementById('pomo-start-btn');
-    if (startBtn) startBtn.textContent = 'Pause Focus';
-
-    pomoInterval = setInterval(() => {
-      pomoSecondsLeft--;
-      updatePomoDisplay();
-
-      if (pomoSecondsLeft <= 0) {
-        clearInterval(pomoInterval);
-        pomoIsRunning = false;
-        if (startBtn) startBtn.textContent = 'Start Focus';
-        playChime();
-        alert('🎉 Focus session completed! Take a break.');
-      }
-    }, 1000);
-  }
-
-  function pausePomo() {
-    pomoIsRunning = false;
-    clearInterval(pomoInterval);
-    const startBtn = document.getElementById('pomo-start-btn');
-    if (startBtn) startBtn.textContent = 'Resume Focus';
-  }
-
-  function resetPomo(mins = 25) {
-    pausePomo();
-    pomoSecondsLeft = mins * 60;
-    updatePomoDisplay();
-    const startBtn = document.getElementById('pomo-start-btn');
-    if (startBtn) startBtn.textContent = 'Start Focus';
-  }
-
-  function updatePomoDisplay() {
-    const display = document.getElementById('pomo-display');
-    if (!display) return;
-    const m = Math.floor(pomoSecondsLeft / 60);
-    const s = pomoSecondsLeft % 60;
-    display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-
-  function playChime() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 1.5);
-    } catch (e) {}
-  }
-
-  // --- SHORTCUTS LAUNCHER ---
-  function initShortcuts() {
-    const defaultList = [
-      { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
-      { name: 'ESV Online', title: 'ESV Online', url: 'https://www.esv.org', icon: '📖' },
-      { name: 'Gmail', title: 'Gmail', url: 'https://mail.google.com', icon: '✉️' },
-      { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' },
-      { name: 'Glance', title: 'Glance', url: 'https://glance.milestuttle.com/home', icon: '⚡' },
-      { name: 'Reddit', title: 'Reddit', url: 'https://www.reddit.com', icon: '💬' },
-      { name: 'YouTube', title: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
-      { name: 'Google News', title: 'Google News', url: 'https://news.google.com', icon: '🌐' },
-      { name: 'Cañon City Daily Record', title: 'Cañon City Daily Record', url: 'https://www.canoncitydailyrecord.com', icon: '📍' },
-      { name: 'Facebook', title: 'Facebook', url: 'https://www.facebook.com', icon: '👥' }
-    ];
-
-    if (!state.shortcuts || !Array.isArray(state.shortcuts) || state.shortcuts.length === 0) {
-      state.shortcuts = defaultList;
-    }
-
-    const hasGemini = state.shortcuts.some(s => s.url && s.url.includes('gemini'));
-    if (!hasGemini) {
-      state.shortcuts.splice(3, 0, { name: 'Gemini', title: 'Gemini', url: 'https://gemini.google.com', icon: '✨' });
-    }
-
-    const hasGlance = state.shortcuts.some(s => s.url && s.url.includes('glance.milestuttle.com'));
-    if (!hasGlance) {
-      state.shortcuts.splice(4, 0, { name: 'Glance', title: 'Glance', url: 'https://glance.milestuttle.com/home', icon: '⚡' });
-    }
-
-    saveState();
-    renderShortcuts();
-
-    const editBtn = document.getElementById('edit-shortcuts-btn');
-    if (editBtn) {
-      editBtn.addEventListener('click', () => {
-        const title = prompt('Shortcut Name:');
-        const url = prompt('Shortcut URL (https://...):');
-        if (title && url) {
-          state.shortcuts.push({ title, url, icon: '🔗' });
-          saveState();
-          renderShortcuts();
-        }
-      });
-    }
-  }
-
-  function renderShortcuts() {
-    const container = document.getElementById('shortcuts-container');
-    if (!container) return;
-
-    const getShortcutIcon = (title, url) => {
-      const str = (title + ' ' + url).toLowerCase();
-      if (str.includes('glance')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>`;
-      if (str.includes('gemini')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9L12 2Z"></path></svg>`;
-      if (str.includes('nyt') || str.includes('times')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path></svg>`;
-      if (str.includes('esv') || str.includes('bible')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
-      if (str.includes('mail') || str.includes('gmail')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
-      if (str.includes('reddit')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>`;
-      if (str.includes('youtube')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="4" ry="4"></rect><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>`;
-      if (str.includes('news')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`;
-      if (str.includes('record') || str.includes('canon')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
-      if (str.includes('facebook')) return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>`;
-      return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+  async function findPlace(query) {
+    const [cityPart, region] = query.split(',').map(s => s.trim());
+    const search = async name => {
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=10&language=en&name=${encodeURIComponent(name)}`);
+      return (await res.json()).results || [];
     };
-
-    container.innerHTML = state.shortcuts.map(s => `
-      <a href="${s.url}" target="_blank" rel="noopener" class="shortcut-item">
-        <span class="shortcut-icon">${getShortcutIcon(s.title || s.name, s.url)}</span>
-        <span class="shortcut-label">${escapeHtml(s.title || s.name)}</span>
-      </a>
-    `).join('');
+    let results = await search(cityPart);
+    if (!results.length) results = await search(cityPart.normalize('NFD').replace(/[̀-ͯ]/g, ''));
+    if (!results.length) return null;
+    const want = (region || '').toLowerCase();
+    const best = (want && results.find(r => [r.admin1, r.country, r.country_code].some(v => v && v.toLowerCase().startsWith(want))))
+      || (want.length === 2 && results.find(r => r.country_code === 'US'))
+      || results[0];
+    return { query, name: best.admin1 ? `${best.name}, ${best.admin1}` : best.name, lat: best.latitude, lon: best.longitude };
   }
 
-  // --- NEWS & RSS AGGREGATOR ---
-  function initNewsFeed() {
-    const pills = document.querySelectorAll('.news-category-pills .pill-btn');
-    pills.forEach(pill => {
-      pill.addEventListener('click', () => {
-        pills.forEach(p => p.classList.remove('active'));
-        pill.classList.add('active');
-        fetchNews(pill.dataset.category);
-      });
-    });
-
-    const refreshBtn = document.getElementById('refresh-news-btn');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => {
-        refreshBtn.style.transform = 'rotate(180deg)';
-        refreshBtn.style.transition = 'transform 0.35s ease';
-        const activePill = document.querySelector('.news-category-pills .pill-btn.active');
-        setTimeout(() => {
-          fetchNews(activePill ? activePill.dataset.category : 'world');
-          setTimeout(() => { refreshBtn.style.transform = 'none'; }, 400);
-        }, 300);
-      });
-    }
-
-    fetchNews('world');
-  }
-
-  function getCleanSourceTitle(feedTitle, defaultName) {
-    if (!feedTitle) return defaultName;
-    if (feedTitle.includes('Futurism')) return 'Futurism';
-    if (feedTitle.includes('WIRED') || feedTitle.includes('Wired')) return 'Wired';
-    if (feedTitle.includes('MIT')) return 'MIT Tech Review';
-    if (feedTitle.includes('Ars Technica')) return 'Ars Technica';
-    if (feedTitle.includes('New Atlas')) return 'New Atlas';
-    if (feedTitle.includes('NYT') || feedTitle.includes('New York Times')) return 'NY Times';
-    if (feedTitle.includes('Canon City') || feedTitle.includes('Google News')) return 'Cañon City Daily Record';
-    return feedTitle;
-  }
-
-  async function fetchNews(category = 'local') {
-    const container = document.getElementById('news-feed-container');
-    const feedSubtitle = document.getElementById('news-feed-name');
-    if (!container) return;
-
-    container.innerHTML = `<div class="loading-spinner-box">Loading news feed...</div>`;
-
-    if (feedSubtitle) {
-      const titles = {
-        local: 'Cañon City Daily Record',
-        world: 'New York Times (World)',
-        national: 'New York Times (National)',
-        tech: 'Futurism, Wired, MIT, Ars Technica & New Atlas'
-      };
-      feedSubtitle.textContent = titles[category] || 'Latest Highlights';
-    }
-
+  async function loadWeather() {
+    const chip = $('weather-chip');
     try {
-      let articles = [];
-      const preset = category === 'custom' && state.customRssUrl ? state.customRssUrl : (RSS_PRESETS[category] || RSS_PRESETS.local);
-
-      if (Array.isArray(preset)) {
-        const results = await Promise.all(preset.map(async url => {
-          try {
-            const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
-            const data = await res.json();
-            const sourceName = getCleanSourceTitle(data.feed ? data.feed.title : '', 'Tech');
-            return (data.items || []).map(item => ({
-              title: item.title,
-              link: item.link,
-              pubDate: item.pubDate,
-              source: sourceName
-            }));
-          } catch (e) {
-            return [];
-          }
-        }));
-        articles = results.flat().sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, 8);
-      } else {
-        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(preset)}`);
-        const data = await res.json();
-
-        if (data.status === 'ok' && data.items && data.items.length > 0) {
-          const defaultSrc = category === 'local' ? 'Cañon City Daily Record' : 
-                             (category === 'world' ? 'NY Times World' : 
-                             (category === 'national' ? 'NY Times National' : 'News'));
-          const sourceName = getCleanSourceTitle(data.feed ? data.feed.title : '', defaultSrc);
-
-          articles = data.items.slice(0, 8).map(item => {
-            let cleanTitle = item.title || '';
-            if (cleanTitle.endsWith(' - Canon City Daily Record')) {
-              cleanTitle = cleanTitle.replace(/ - Canon City Daily Record$/, '');
-            }
-            return {
-              title: cleanTitle,
-              link: item.link,
-              pubDate: item.pubDate,
-              source: sourceName
-            };
-          });
-        }
+      if (!settings.city) throw new Error('No location set');
+      if (!settings.place || settings.place.query !== settings.city) {
+        settings.place = await findPlace(settings.city);
+        if (!settings.place) throw new Error(`Couldn't find "${settings.city}"`);
+        saveSettings();
       }
-
-      if (articles.length > 0) {
-        container.innerHTML = articles.map(item => `
-          <div class="news-card-item">
-            <a href="${item.link}" target="_blank" rel="noopener" class="news-item-title">${escapeHtml(item.title)}</a>
-            <div class="news-item-meta">
-              <span class="news-source-badge">${escapeHtml(item.source)}</span>
-              <span>${item.pubDate ? new Date(item.pubDate).toLocaleDateString() : ''}</span>
-            </div>
-          </div>
-        `).join('');
-      } else {
-        container.innerHTML = `<div class="loading-spinner-box">Could not load RSS feed. Check internet connection.</div>`;
-      }
+      const p = settings.place;
+      const url = 'https://api.open-meteo.com/v1/forecast'
+        + `?latitude=${p.lat}&longitude=${p.lon}&timezone=auto&forecast_days=7`
+        + '&temperature_unit=fahrenheit&wind_speed_unit=mph'
+        + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day'
+        + '&hourly=temperature_2m,precipitation_probability,weather_code,is_day'
+        + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Weather service error');
+      weather = await res.json();
+      const c = weather.current;
+      const d = describeWeather(c.weather_code, c.is_day);
+      $('weather-temp').textContent = `${Math.round(c.temperature_2m)}°`;
+      $('weather-desc').textContent = `${d.text} · H ${Math.round(weather.daily.temperature_2m_max[0])}° L ${Math.round(weather.daily.temperature_2m_min[0])}°`;
+      $('weather-icon').innerHTML = `<use href="#i-${d.icon}"/>`;
+      chip.disabled = false;
     } catch (e) {
-      container.innerHTML = `<div class="loading-spinner-box">Error fetching news feed.</div>`;
+      $('weather-temp').textContent = '--°';
+      $('weather-desc').textContent = e.message || 'Weather unavailable';
+      chip.disabled = true;
     }
   }
 
-  // --- SCRATCHPAD ---
-  function initScratchpad() {
-    const textarea = document.getElementById('scratchpad-textarea');
-    if (textarea) {
-      textarea.value = state.scratchpad || '';
-      textarea.addEventListener('input', () => {
-        state.scratchpad = textarea.value;
-        saveState();
-        updateKpiStats();
-      });
-    }
+  function renderWeatherDialog() {
+    if (!weather) return;
+    const c = weather.current;
+    const daily = weather.daily;
+    const hourly = weather.hourly;
+    const now = describeWeather(c.weather_code, c.is_day);
+    const clockTime = iso => fmtTime(new Date(iso)); // Open-Meteo times are local to the location
 
-    const copyBtn = document.getElementById('copy-scratch-btn');
-    if (copyBtn && textarea) {
-      copyBtn.addEventListener('click', () => {
-        copyBtn.textContent = '⏳ Copying...';
-        setTimeout(() => {
-          navigator.clipboard.writeText(textarea.value);
-          copyBtn.textContent = '✓ Copied!';
-          setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
-        }, 200);
-      });
-    }
+    $('weather-dialog-title').textContent = settings.place ? settings.place.name : 'Weather';
 
-    const clearBtn = document.getElementById('clear-scratch-btn');
-    if (clearBtn && textarea) {
-      clearBtn.addEventListener('click', () => {
-        if (confirm('Clear scratchpad notes?')) {
-          textarea.value = '';
-          state.scratchpad = '';
-          saveState();
-        }
-      });
+    let start = hourly.time.findIndex(t => t >= c.time.slice(0, 13));
+    if (start < 0) start = 0;
+    const hours = hourly.time.slice(start, start + 12).map((t, i) => {
+      const j = start + i;
+      const d = describeWeather(hourly.weather_code[j], hourly.is_day[j]);
+      return `<li class="hour">
+        <span class="muted small">${i === 0 ? 'Now' : new Date(t).toLocaleTimeString('en-US', { hour: 'numeric' })}</span>
+        ${icon(d.icon)}
+        <strong>${Math.round(hourly.temperature_2m[j])}°</strong>
+        <span class="muted small">${hourly.precipitation_probability[j] || 0}%</span>
+      </li>`;
+    }).join('');
+
+    const days = daily.time.map((t, i) => {
+      const d = describeWeather(daily.weather_code[i]);
+      const label = i === 0 ? 'Today' : new Date(`${t}T12:00`).toLocaleDateString('en-US', { weekday: 'short' });
+      return `<li class="day">
+        <span class="day-name">${label}</span>
+        ${icon(d.icon)}
+        <span class="muted small day-desc">${d.text}${daily.precipitation_probability_max[i] ? ` · ${daily.precipitation_probability_max[i]}%` : ''}</span>
+        <span class="day-temps"><span class="muted">${Math.round(daily.temperature_2m_min[i])}°</span> ${Math.round(daily.temperature_2m_max[i])}°</span>
+      </li>`;
+    }).join('');
+
+    $('weather-dialog-body').innerHTML = `
+      <div class="wx-now">
+        ${icon(now.icon, 'icon-xl')}
+        <div>
+          <div class="wx-temp">${Math.round(c.temperature_2m)}°</div>
+          <div class="muted">${now.text} · feels like ${Math.round(c.apparent_temperature)}°</div>
+        </div>
+      </div>
+      <dl class="wx-stats">
+        <div><dt>Wind</dt><dd>${Math.round(c.wind_speed_10m)} mph</dd></div>
+        <div><dt>Rain chance</dt><dd>${daily.precipitation_probability_max[0] || 0}%</dd></div>
+        <div><dt>Sunrise</dt><dd>${clockTime(daily.sunrise[0])}</dd></div>
+        <div><dt>Sunset</dt><dd>${clockTime(daily.sunset[0])}</dd></div>
+      </dl>
+      <h3 class="section-label">Next 12 hours</h3>
+      <ul class="hours">${hours}</ul>
+      <h3 class="section-label">7 days</h3>
+      <ul class="days">${days}</ul>`;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Apps Script data (calendar, devotional, news)                     */
+  /* ---------------------------------------------------------------- */
+
+  const connected = () => !!(settings.apiUrl && settings.apiKey);
+
+  async function loadData(force) {
+    renderData();
+    if (!connected()) return;
+    $('refresh-btn').hidden = true;
+    setStatus('Updating…');
+    try {
+      const url = new URL(settings.apiUrl);
+      url.searchParams.set('action', 'dashboard');
+      url.searchParams.set('key', settings.apiKey);
+      url.searchParams.set('date', localDate());
+      url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone);
+      if (force) url.searchParams.set('refresh', '1');
+      const payload = await callApi(fetch(url));
+      data = { fetchedAt: Date.now(), payload };
+      writeJson(DATA_KEY, data);
+      renderData();
+    } catch (e) {
+      setStatus(`Couldn't update: ${e.message}`, true);
+    } finally {
+      $('refresh-btn').hidden = false;
     }
   }
 
-  // --- GRATITUDE & MAIN GOAL ---
-  function initGratitude() {
-    const goalInput = document.getElementById('daily-main-goal');
-    if (goalInput) {
-      goalInput.value = state.mainGoal || '';
-      goalInput.addEventListener('input', () => {
-        state.mainGoal = goalInput.value;
-        saveState();
-      });
+  async function callApi(request) {
+    let res;
+    try { res = await request; } catch (e) { throw new Error('network error. Check the web app URL.'); }
+    let json;
+    try { json = await res.json(); } catch (e) {
+      throw new Error('the web app did not return data. Make sure it is deployed with access set to "Anyone".');
     }
-
-    [1, 2, 3].forEach(num => {
-      const gInput = document.getElementById(`daily-gratitude-${num}`);
-      if (gInput) {
-        gInput.value = (state.gratitude && state.gratitude[num - 1]) || '';
-        gInput.addEventListener('input', () => {
-          if (!state.gratitude) state.gratitude = ['', '', ''];
-          state.gratitude[num - 1] = gInput.value;
-          saveState();
-        });
-      }
-    });
+    if (!json.ok) {
+      throw new Error(json.error === 'unauthorized' ? 'the API key does not match. Check Settings.' : json.error);
+    }
+    return json;
   }
 
-  // --- SETTINGS MODAL ---
-  function initSettingsModal() {
-    const openBtn = document.getElementById('settings-open-btn');
-    const modal = document.getElementById('settings-modal');
-    const closeBtn = document.getElementById('close-settings-modal');
-    const saveBtn = document.getElementById('save-settings-btn');
+  /** The cached payload, if it is for today. */
+  function todayPayload() {
+    return data && data.payload && data.payload.date === localDate() ? data.payload : null;
+  }
 
-    if (openBtn && modal) {
-      openBtn.addEventListener('click', () => {
-        document.getElementById('setting-user-name').value = state.userName || '';
-        document.getElementById('setting-ical-url').value = state.icalUrl || '';
-        document.getElementById('setting-weather-city').value = state.weatherCity || '';
-        document.getElementById('setting-custom-rss').value = state.customRssUrl || '';
-        modal.classList.add('active');
-      });
-    }
-
-    if (closeBtn && modal) {
-      closeBtn.addEventListener('click', () => modal.classList.remove('active'));
-    }
-
-    if (saveBtn && modal) {
-      saveBtn.addEventListener('click', () => {
-        state.userName = document.getElementById('setting-user-name').value.trim() || 'Miles';
-        state.icalUrl = document.getElementById('setting-ical-url').value.trim();
-        state.weatherCity = document.getElementById('setting-weather-city').value.trim();
-        state.customRssUrl = document.getElementById('setting-custom-rss').value.trim();
-        saveState();
-        modal.classList.remove('active');
-        location.reload();
-      });
-    }
-
-    // Export JSON
-    const exportBtn = document.getElementById('export-data-btn');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
-        const a = document.createElement('a');
-        a.href = dataStr;
-        a.download = `daily-dashboard-backup-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-      });
-    }
-
-    // Import JSON
-    const importFile = document.getElementById('import-data-file');
-    if (importFile) {
-      importFile.addEventListener('change', e => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = event => {
-            try {
-              state = JSON.parse(event.target.result);
-              saveState();
-              alert('Backup imported successfully!');
-              location.reload();
-            } catch (err) { alert('Invalid backup file.'); }
-          };
-          reader.readAsText(file);
-        }
-      });
-    }
-
-    // Reset Data
-    const resetBtn = document.getElementById('reset-data-btn');
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to reset all tasks, notes, and settings?')) {
-          localStorage.removeItem(STORAGE_KEY);
-          location.reload();
-        }
-      });
+  function renderData() {
+    const payload = todayPayload();
+    $('setup').hidden = connected();
+    renderDevotional(payload);
+    renderSchedule();
+    renderNews(payload);
+    if (!connected()) {
+      setStatus('Not connected to Google yet');
+    } else if (payload) {
+      const errors = payload.errors || [];
+      const when = fmtTime(new Date(data.fetchedAt));
+      setStatus(errors.length ? `Updated ${when}. Problems: ${errors.join('; ')}` : `Updated ${when}`, errors.length > 0);
     }
   }
 
-  // --- PWA SERVICE WORKER ---
-  function initPWA() {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-          for (let registration of registrations) {
-            registration.unregister();
-          }
-        });
-      }
-      if ('caches' in window) {
-        caches.keys().then(names => {
-          names.forEach(name => caches.delete(name));
-        });
-      }
+  /* ---------------------------------------------------------------- */
+  /* Devotional                                                        */
+  /* ---------------------------------------------------------------- */
+
+  function renderDevotional(payload) {
+    const body = $('devo-body');
+    const devo = payload && payload.devotional;
+    const siteLink = `<a class="btn btn-small btn-quiet" href="https://utmost.org/modern-classic/today/" target="_blank" rel="noopener">utmost.org ${icon('external')}</a>`;
+
+    if (!devo) {
+      const msg = !connected()
+        ? 'Today\'s reading will show here once Settings is connected.'
+        : payload ? 'Couldn\'t load today\'s reading.' : 'Loading today\'s reading…';
+      body.innerHTML = `<p class="muted">${msg}</p><div class="button-row">${siteLink}</div>`;
       return;
     }
 
-    if ('caches' in window) {
-      caches.keys().then(names => {
-        names.forEach(name => {
-          if (name !== 'daily-dashboard-v43') {
-            caches.delete(name);
-          }
-        });
-      });
-    }
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        for (let registration of registrations) {
-          registration.update();
-        }
-      });
-      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW error:', err));
-    }
+    body.innerHTML = `
+      <h3 class="devo-title">${esc(devo.title)}</h3>
+      ${devo.verseText ? `<blockquote class="verse"><p>${esc(devo.verseText)}</p><cite>${esc(devo.verseRef)}</cite></blockquote>` : ''}
+      <p class="excerpt">${esc(devo.paragraphs[0])}</p>
+      <div class="button-row">
+        <button class="btn btn-primary btn-small" type="button" id="devo-read">Read</button>
+        <button class="btn btn-small" type="button" data-speak>${icon('speaker')}Listen</button>
+        <a class="btn btn-small btn-quiet" href="${esc(safeUrl(devo.url))}" target="_blank" rel="noopener">utmost.org ${icon('external')}</a>
+      </div>`;
+
+    $('devo-read').addEventListener('click', () => {
+      $('devo-dialog-title').textContent = devo.title;
+      $('devo-dialog-body').innerHTML = `
+        ${devo.verseText ? `<blockquote class="verse"><p>${esc(devo.verseText)}</p><cite>${esc(devo.verseRef)}</cite></blockquote>` : ''}
+        ${devo.paragraphs.map(p => `<p>${esc(p)}</p>`).join('')}
+        <div class="button-row">
+          <button class="btn btn-small" type="button" data-speak>${icon('speaker')}Listen</button>
+          <a class="btn btn-small btn-quiet" href="${esc(safeUrl(devo.url))}" target="_blank" rel="noopener">Read on utmost.org ${icon('external')}</a>
+        </div>`;
+      $('devo-dialog').showModal();
+    });
   }
 
-  // --- COMMAND PALETTE ENGINE (PROPOSAL 1) ---
-  let commandItems = [];
-  let selectedIndex = 0;
+  // Read-aloud. Chrome cuts off long utterances, so speak one paragraph at a time.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-speak]');
+    if (!btn || !('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis;
+    const wasSpeaking = synth.speaking;
+    synth.cancel();
+    document.querySelectorAll('[data-speak]').forEach(b => { b.innerHTML = `${icon('speaker')}Listen`; });
+    if (wasSpeaking) return;
 
-  function initCommandPalette() {
-    const modal = document.getElementById('command-palette-modal');
-    const input = document.getElementById('command-palette-input');
-    const resultsContainer = document.getElementById('command-palette-results');
-    const triggerBtn = document.getElementById('command-palette-btn');
-
-    if (!modal || !input || !resultsContainer) return;
-
-    function openPalette() {
-      buildCommandsList();
-      renderCommandResults(input.value);
-      modal.classList.add('active');
-      input.value = '';
-      selectedIndex = 0;
-      setTimeout(() => input.focus(), 100);
-    }
-
-    function closePalette() {
-      modal.classList.remove('active');
-    }
-
-    if (triggerBtn) {
-      triggerBtn.addEventListener('click', openPalette);
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (modal.classList.contains('active')) {
-          closePalette();
-        } else {
-          openPalette();
-        }
-      }
-      if (e.key === 'Escape' && modal.classList.contains('active')) {
-        closePalette();
-      }
+    const payload = todayPayload();
+    const devo = payload && payload.devotional;
+    if (!devo) return;
+    const parts = [devo.title, devo.verseText && `${devo.verseText} ${devo.verseRef}`].concat(devo.paragraphs).filter(Boolean);
+    btn.innerHTML = `${icon('stop')}Stop`;
+    parts.forEach((text, i) => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95;
+      if (i === parts.length - 1) u.onend = () => { btn.innerHTML = `${icon('speaker')}Listen`; };
+      synth.speak(u);
     });
+  });
 
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closePalette();
-    });
+  /* ---------------------------------------------------------------- */
+  /* Schedule                                                          */
+  /* ---------------------------------------------------------------- */
 
-    input.addEventListener('input', () => {
-      selectedIndex = 0;
-      renderCommandResults(input.value);
-    });
+  function renderSchedule() {
+    const payload = todayPayload();
+    const body = $('schedule-body');
+    const nextUp = $('next-up');
+    const calendars = payload ? payload.calendars || [] : [];
+    $('add-event-btn').hidden = !calendars.some(c => c.writable);
 
-    input.addEventListener('keydown', (e) => {
-      const items = resultsContainer.querySelectorAll('.command-item');
-      if (!items.length) return;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedIndex = (selectedIndex + 1) % items.length;
-        updateSelectedCommandItem(items);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedIndex = (selectedIndex - 1 + items.length) % items.length;
-        updateSelectedCommandItem(items);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (items[selectedIndex]) {
-          items[selectedIndex].click();
-        }
-      }
-    });
-
-    function updateSelectedCommandItem(items) {
-      items.forEach((el, idx) => {
-        if (idx === selectedIndex) {
-          el.classList.add('selected');
-          el.scrollIntoView({ block: 'nearest' });
-        } else {
-          el.classList.remove('selected');
-        }
-      });
+    if (!payload) {
+      body.innerHTML = `<p class="muted">${connected() ? 'Loading your calendar…' : 'Your calendar will show here once Settings is connected.'}</p>`;
+      nextUp.hidden = true;
+      return;
     }
 
-    function buildCommandsList() {
-      commandItems = [
-        {
-          title: '🔄 Sync Calendars (Work & Personal)',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('refresh-ical-btn');
-            if (btn) btn.click();
-          }
-        },
-        {
-          title: '🔊 Listen to Daily Scripture',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('speak-scripture-btn');
-            if (btn) btn.click();
-          }
-        },
-        {
-          title: '📖 Read Full Devotional Entry',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('read-full-devotional-btn');
-            if (btn) btn.click();
-          }
-        },
-        {
-          title: '🌿 Cycle Color Theme (Fire / Branch Linen / Emerald / Violet / Light)',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('theme-toggle-btn');
-            if (btn) btn.click();
-          }
-        },
-        {
-          title: '📋 Copy Scratchpad Notes',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('copy-scratch-btn');
-            if (btn) btn.click();
-          }
-        },
-        {
-          title: '➕ Add Calendar Event',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('add-event-btn');
-            if (btn) btn.click();
-          }
-        },
-        {
-          title: '⚙️ Dashboard Settings & iCal Feeds',
-          cat: 'Action',
-          action: () => {
-            closePalette();
-            const btn = document.getElementById('settings-open-btn');
-            if (btn) btn.click();
-          }
-        }
-      ];
+    const now = Date.now();
+    const events = payload.events || [];
+    const allDay = events.filter(e => e.allDay);
+    const timed = events.filter(e => !e.allDay);
+    const dot = e => `<span class="cal-dot" data-cal="${Number(e.calIndex) % 4}" title="${esc(e.calendar)}"></span>`;
 
-      // Add Bookmarks
-      const countBadge = document.getElementById('shortcuts-count-badge');
-      if (countBadge) {
-        countBadge.textContent = `${state.shortcuts ? state.shortcuts.length : 0} Links`;
-      }
-
-      if (state.shortcuts && state.shortcuts.length > 0) {
-        state.shortcuts.forEach(s => {
-          commandItems.push({
-            title: `🚀 Open ${s.name}`,
-            url: s.url,
-            cat: 'Bookmark',
-            action: () => {
-              closePalette();
-              window.open(s.url, '_blank');
-            }
-          });
-        });
-      }
-
-      // Add News Items currently in DOM
-      const newsLinks = document.querySelectorAll('.news-item-title');
-      newsLinks.forEach(link => {
-        commandItems.push({
-          title: `📰 ${link.textContent.trim()}`,
-          url: link.href,
-          cat: 'News',
-          action: () => {
-            closePalette();
-            window.open(link.href, '_blank');
-          }
-        });
-      });
+    const next = timed.find(e => new Date(e.end) > now);
+    if (next) {
+      const starts = new Date(next.start);
+      nextUp.textContent = starts <= now ? `Now: ${next.title}` : `Next: ${next.title} at ${fmtTime(starts)}`;
+      nextUp.hidden = false;
+    } else {
+      nextUp.hidden = true;
     }
 
-    function renderCommandResults(query) {
-      const q = (query || '').toLowerCase().trim();
-      const filtered = q
-        ? commandItems.filter(item => item.title.toLowerCase().includes(q) || item.cat.toLowerCase().includes(q))
-        : commandItems;
-
-      if (filtered.length === 0) {
-        resultsContainer.innerHTML = `<div class="loading-spinner-box">No matching commands or links found.</div>`;
-        return;
-      }
-
-      resultsContainer.innerHTML = filtered.map((item, idx) => `
-        <div class="command-item ${idx === selectedIndex ? 'selected' : ''}" data-idx="${idx}">
-          <span class="command-item-title">${escapeHtml(item.title)}</span>
-          <span class="command-item-cat">${escapeHtml(item.cat)}</span>
-        </div>
-      `).join('');
-
-      const itemEls = resultsContainer.querySelectorAll('.command-item');
-      itemEls.forEach((el, idx) => {
-        el.addEventListener('click', () => {
-          if (filtered[idx] && filtered[idx].action) {
-            filtered[idx].action();
-          }
-        });
-      });
+    if (!events.length) {
+      body.innerHTML = '<p class="muted">Nothing on the calendar today.</p>';
+      return;
     }
+
+    body.innerHTML = `
+      ${calendars.length > 1 ? `<div class="legend">${calendars.map(c => `<span>${dot({ calIndex: c.index, calendar: c.name })}${esc(c.name)}</span>`).join('')}</div>` : ''}
+      ${allDay.length ? `<ul class="all-day">${allDay.map(e => `<li>${dot(e)}${esc(e.title)}</li>`).join('')}</ul>` : ''}
+      <ol class="events">
+        ${timed.map(e => {
+          const s = new Date(e.start);
+          const end = new Date(e.end);
+          const state = end <= now ? 'past' : s <= now ? 'now' : '';
+          return `<li class="event ${state}">
+            <span class="event-time">${fmtTime(s)}<span class="muted"> – ${fmtTime(end)}</span></span>
+            <span class="event-main">
+              <span class="event-title">${dot(e)}${esc(e.title)}${state === 'now' ? ' <span class="now-tag">Now</span>' : ''}</span>
+              ${e.location ? `<span class="event-loc muted">${esc(e.location)}</span>` : ''}
+            </span>
+          </li>`;
+        }).join('')}
+      </ol>`;
   }
 
-  function updateKpiStats() {
-    const eventsVal = document.getElementById('kpi-events-val');
-    if (eventsVal) {
-      const eventCount = state.events ? state.events.length : 0;
-      eventsVal.textContent = `${eventCount} Event${eventCount === 1 ? '' : 's'}`;
-    }
-  }
+  function initEvents() {
+    const dialog = $('event-dialog');
+    const form = $('event-form');
+    const error = $('event-error');
+    const syncAllDay = () => { $('event-times').hidden = form.allDay.checked; };
+    form.allDay.addEventListener('change', syncAllDay);
 
-  function initWidgetCollapse() {
-    state.collapsedWidgets = state.collapsedWidgets || [];
+    $('add-event-btn').addEventListener('click', () => {
+      const payload = todayPayload();
+      const writable = (payload ? payload.calendars : []).filter(c => c.writable);
+      $('event-calendar').innerHTML = writable.map(c => `<option value="${c.index}">${esc(c.name)}</option>`).join('');
+      form.reset();
+      form.date.value = localDate();
+      const start = new Date();
+      start.setMinutes(0, 0, 0);
+      start.setHours(start.getHours() + 1);
+      const end = new Date(start.getTime() + 60 * 60000);
+      const hhmm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      form.start.value = hhmm(start);
+      form.end.value = hhmm(end);
+      error.hidden = true;
+      syncAllDay();
+      dialog.showModal();
+      form.title.focus();
+    });
 
-    // Apply saved collapsed state
-    document.querySelectorAll('.widget-card').forEach(card => {
-      const toggleBtn = card.querySelector('.widget-toggle-btn');
-      if (toggleBtn) {
-        const widgetName = toggleBtn.dataset.widget;
-        if (state.collapsedWidgets.includes(widgetName)) {
-          card.classList.add('collapsed');
-        }
-
-        toggleBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          card.classList.toggle('collapsed');
-          const isCollapsed = card.classList.contains('collapsed');
-
-          if (isCollapsed) {
-            if (!state.collapsedWidgets.includes(widgetName)) {
-              state.collapsedWidgets.push(widgetName);
-            }
-          } else {
-            state.collapsedWidgets = state.collapsedWidgets.filter(w => w !== widgetName);
-          }
-          saveState();
-        });
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const save = $('event-save');
+      save.disabled = true;
+      error.hidden = true;
+      try {
+        await callApi(fetch(settings.apiUrl, {
+          method: 'POST',
+          // text/plain avoids a CORS preflight, which Apps Script can't answer.
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            key: settings.apiKey,
+            action: 'addEvent',
+            calIndex: Number(form.calIndex.value),
+            title: form.title.value.trim(),
+            date: form.date.value,
+            allDay: form.allDay.checked,
+            start: form.start.value,
+            end: form.end.value,
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+          })
+        }));
+        dialog.close();
+        loadData(true);
+      } catch (err) {
+        error.textContent = `Couldn't add the event: ${err.message}`;
+        error.hidden = false;
+      } finally {
+        save.disabled = false;
       }
     });
   }
 
-  function initDensityToggle() {
-    const btn = document.getElementById('density-toggle-btn');
-    const currentDensity = state.density || 'normal';
-    document.documentElement.setAttribute('data-density', currentDensity);
+  /* ---------------------------------------------------------------- */
+  /* News                                                              */
+  /* ---------------------------------------------------------------- */
 
-    if (btn) {
-      btn.textContent = currentDensity === 'compact' ? '📐 Roomy' : '📐 Compact';
-      btn.addEventListener('click', () => {
-        const nextDensity = (state.density || 'normal') === 'normal' ? 'compact' : 'normal';
-        state.density = nextDensity;
-        document.documentElement.setAttribute('data-density', nextDensity);
-        btn.textContent = nextDensity === 'compact' ? '📐 Roomy' : '📐 Compact';
-        saveState();
-      });
+  function renderNews(payload) {
+    const tabs = $('news-tabs');
+    const body = $('news-body');
+    const cats = payload ? (payload.news || []).filter(c => c.items.length) : [];
+
+    if (!cats.length) {
+      tabs.innerHTML = '';
+      body.innerHTML = `<p class="muted">${!connected() ? 'Headlines will show here once Settings is connected.' : payload ? 'No headlines right now.' : 'Loading headlines…'}</p>`;
+      return;
     }
+
+    const active = cats.find(c => c.id === settings.newsTab) || cats[0];
+    tabs.innerHTML = cats.map(c => `<button type="button" role="tab" class="tab" data-tab="${esc(c.id)}" aria-selected="${c === active}">${esc(c.label)}</button>`).join('');
+    body.innerHTML = `<ul class="headlines">${active.items.map(it => `
+      <li>
+        <a href="${esc(safeUrl(it.link))}" target="_blank" rel="noopener">${esc(it.title)}</a>
+        <span class="muted small">${esc(it.source)}${it.date ? ` · ${relativeTime(it.date)}` : ''}</span>
+      </li>`).join('')}</ul>`;
   }
 
-  function initNavRail() {
-    const railBtns = document.querySelectorAll('.rail-btn[data-target]');
-    const commandBtn = document.getElementById('rail-command-btn');
+  function initNews() {
+    $('news-tabs').addEventListener('click', e => {
+      const tab = e.target.closest('[data-tab]');
+      if (!tab) return;
+      settings.newsTab = tab.dataset.tab;
+      saveSettings();
+      renderNews(todayPayload());
+    });
+  }
 
-    if (commandBtn) {
-      commandBtn.addEventListener('click', () => {
-        const cmdModal = document.getElementById('command-palette-modal');
-        if (cmdModal) {
-          cmdModal.classList.add('active');
-          const input = document.getElementById('command-palette-input');
-          if (input) { input.value = ''; input.focus(); }
-        }
+  /* ---------------------------------------------------------------- */
+  /* Bookmarks                                                         */
+  /* ---------------------------------------------------------------- */
+
+  const LINK_ICONS = [
+    [/glance/, 'bolt'], [/gemini/, 'spark'], [/mail/, 'mail'], [/esv|bible/, 'book'],
+    [/nytimes|news\.google/, 'news'], [/canoncity|dailyrecord/, 'pin'], [/youtube/, 'play'],
+    [/reddit/, 'message'], [/facebook/, 'users']
+  ];
+
+  function renderLinks() {
+    $('links-body').innerHTML = settings.bookmarks.map(b => {
+      const match = LINK_ICONS.find(([re]) => re.test(b.url.toLowerCase()));
+      const glyph = match ? icon(match[1]) : `<span class="monogram">${esc((b.name || '?').trim().charAt(0).toUpperCase())}</span>`;
+      return `<a class="link" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener"><span class="link-icon">${glyph}</span><span class="link-name">${esc(b.name)}</span></a>`;
+    }).join('');
+  }
+
+  function parseBookmarks(text) {
+    return text.split('\n').map(line => {
+      const bar = line.lastIndexOf('|');
+      const name = (bar >= 0 ? line.slice(0, bar) : '').trim();
+      let url = (bar >= 0 ? line.slice(bar + 1) : line).trim();
+      if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+      return url ? { name: name || url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url } : null;
+    }).filter(Boolean);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Notes                                                             */
+  /* ---------------------------------------------------------------- */
+
+  function initNotes() {
+    const text = $('notes-text');
+    const status = $('notes-status');
+    let timer;
+    text.value = settings.notes || '';
+    text.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        settings.notes = text.value;
+        saveSettings();
+        status.textContent = 'Saved';
+        setTimeout(() => { status.textContent = ''; }, 1500);
+      }, 400);
+    });
+    $('copy-notes').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text.value);
+        status.textContent = 'Copied';
+      } catch (e) {
+        status.textContent = 'Copy failed';
+      }
+      setTimeout(() => { status.textContent = ''; }, 1500);
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Dialogs and settings                                              */
+  /* ---------------------------------------------------------------- */
+
+  function initDialogs() {
+    document.querySelectorAll('dialog').forEach(d => {
+      d.addEventListener('click', e => {
+        if (e.target === d || e.target.closest('[data-close]')) d.close();
       });
-    }
+      d.addEventListener('close', () => { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); });
+    });
+    $('weather-chip').addEventListener('click', () => {
+      renderWeatherDialog();
+      $('weather-dialog').showModal();
+    });
+    $('refresh-btn').addEventListener('click', () => { loadData(true); loadWeather(); });
+  }
 
-    railBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.target;
-        if (targetId === 'top') {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-          const targetEl = document.getElementById(targetId);
-          if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }
+  function initSettings() {
+    const dialog = $('settings-dialog');
+    const form = $('settings-form');
 
-        railBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      });
+    document.addEventListener('click', e => {
+      const opener = e.target.closest('[data-open-settings]');
+      if (!opener) return;
+      form.name.value = settings.name;
+      form.city.value = settings.city;
+      form.theme.value = settings.theme;
+      form.apiUrl.value = settings.apiUrl;
+      form.apiKey.value = settings.apiKey;
+      form.bookmarks.value = settings.bookmarks.map(b => `${b.name} | ${b.url}`).join('\n');
+      dialog.showModal();
+      if (opener.dataset.openSettings === 'bookmarks') {
+        form.bookmarks.focus();
+        $('bookmarks-field').scrollIntoView({ block: 'center' });
+      }
     });
 
-    // Update active rail link on scroll
-    window.addEventListener('scroll', () => {
-      const scrollPos = window.scrollY + 200;
-      const targets = ['widget-devotional', 'widget-agenda', 'widget-launcher', 'widget-news', 'widget-scratchpad'];
-
-      if (window.scrollY < 150) {
-        railBtns.forEach(b => b.classList.toggle('active', b.dataset.target === 'top'));
-        return;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const before = { city: settings.city, apiUrl: settings.apiUrl, apiKey: settings.apiKey };
+      Object.assign(settings, {
+        name: form.name.value.trim(),
+        city: form.city.value.trim(),
+        theme: form.theme.value,
+        apiUrl: form.apiUrl.value.trim(),
+        apiKey: form.apiKey.value.trim(),
+        bookmarks: parseBookmarks(form.bookmarks.value)
+      });
+      saveSettings();
+      dialog.close();
+      applyTheme();
+      tick();
+      renderLinks();
+      if (settings.city !== before.city) loadWeather();
+      if (settings.apiUrl !== before.apiUrl || settings.apiKey !== before.apiKey) {
+        data = null;
+        localStorage.removeItem(DATA_KEY);
+        loadData(true);
       }
+    });
 
-      for (let i = targets.length - 1; i >= 0; i--) {
-        const el = document.getElementById(targets[i]);
-        if (el && el.offsetTop <= scrollPos) {
-          railBtns.forEach(b => b.classList.toggle('active', b.dataset.target === targets[i]));
-          break;
-        }
+    $('export-btn').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `dailydash-backup-${localDate()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+    $('import-file').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const imported = JSON.parse(await file.text());
+        if (!imported || typeof imported !== 'object' || Array.isArray(imported)) throw new Error();
+        settings = Object.assign({}, DEFAULTS, imported);
+        saveSettings();
+        location.reload();
+      } catch (err) {
+        alert('That file is not a DailyDash backup.');
       }
-    }, { passive: true });
+    });
+
+    $('reset-btn').addEventListener('click', () => {
+      if (!confirm('Reset settings, bookmarks, and notes on this device?')) return;
+      [SETTINGS_KEY, DATA_KEY, LEGACY_KEY].forEach(k => localStorage.removeItem(k));
+      location.reload();
+    });
   }
 
-  // --- HELPERS ---
-  function escapeHtml(str) {
-    return String(str || '').replace(/[&<>"']/g, match => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    })[match]);
-  }
+  /* ---------------------------------------------------------------- */
+  /* Section navigation                                                */
+  /* ---------------------------------------------------------------- */
 
+  function initNav() {
+    const links = [...document.querySelectorAll('.nav a.nav-link')];
+    const sections = links.map(a => document.querySelector(a.getAttribute('href')));
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === `#${entry.target.id}`));
+      });
+    }, { rootMargin: '-40% 0px -55% 0px' });
+    sections.forEach(s => s && observer.observe(s));
+  }
 })();
