@@ -12,6 +12,9 @@ const API = 'https://script.google.com/macros/s/TEST/exec';
 const TZ = 'America/Denver';
 const NOW = new Date('2026-09-28T10:15:00-06:00');
 const TODAY = '2026-09-28';
+// Set SCREENSHOTS=some/dir to save screenshots for a visual check.
+const SHOTS = process.env.SCREENSHOTS;
+const shot = (page, name, opts = {}) => (SHOTS ? page.screenshot(Object.assign({ path: path.join(SHOTS, `${name}.png`) }, opts)) : null);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
 
 function staticServer() {
@@ -26,7 +29,7 @@ function staticServer() {
 
 const event = (title, start, end, extra = {}) => ({ title, start, end, allDay: false, location: '', calendar: 'Work', calIndex: 0, ...extra });
 
-function dashboard(sync) {
+function dashboard(sync, backend = {}) {
   return {
     ok: true,
     date: TODAY,
@@ -34,10 +37,17 @@ function dashboard(sync) {
     calendars: [{ index: 0, name: 'Work', writable: false }, { index: 1, name: 'Personal', writable: true }],
     events: [
       { title: 'Fall break', start: '2026-09-28T06:00:00Z', end: '2026-09-30T06:00:00Z', allDay: true, location: '', calendar: 'Work', calIndex: 0 },
-      event('Early standup', '2026-09-28T14:00:00Z', '2026-09-28T14:30:00Z'),
-      event('Current meeting <script>alert(1)</script>', '2026-09-28T16:00:00Z', '2026-09-28T17:30:00Z', { location: 'Room 204' }),
+      event('Early standup', '2026-09-28T14:00:00Z', '2026-09-28T14:30:00Z', { joinUrl: 'https://zoom.us/j/1' }),
+      event('Current meeting <script>alert(1)</script>', '2026-09-28T16:00:00Z', '2026-09-28T17:30:00Z', {
+        location: 'Room 204',
+        joinUrl: 'https://meet.google.com/abc-defg-hij',
+        description: 'Agenda:\n• Budget\nNotes: https://docs.google.com/d/1.',
+        attendees: [{ name: 'Pat Lee', status: 'accepted', organizer: true }, { name: 'Sam <b>Ortiz</b>', status: 'tentative', organizer: false }],
+        attendeeCount: 12,
+        link: 'https://calendar.google.com/event?eid=1'
+      }),
       event('Dinner with family', '2026-09-29T00:00:00Z', '2026-09-29T01:00:00Z', { calendar: 'Personal', calIndex: 1 }),
-      event('Tomorrow planning', '2026-09-29T15:00:00Z', '2026-09-29T16:00:00Z')
+      event('Tomorrow planning', '2026-09-29T15:00:00Z', '2026-09-29T16:00:00Z', { joinUrl: 'https://zoom.us/j/2' })
     ],
     devotional: {
       title: 'The “Go” of Renunciation',
@@ -55,10 +65,37 @@ function dashboard(sync) {
       { id: 'tech', label: 'Tech', items: [] },
       { id: 'local', label: 'Local', items: [{ title: 'Royal Gorge Bridge event draws crowds', link: 'https://news.google.com/x', source: 'Cañon City Daily Record', date: '2026-09-26T15:00:00Z' }] }
     ],
+    tasks: backend.noExtras ? undefined : backend.tasks,
+    inbox: backend.noExtras ? undefined : {
+      email: 'me@gmail.com',
+      unread: 7,
+      threads: [
+        { id: 't1', from: 'Liza Tuttle', subject: 'Dinner Friday?', snippet: 'Bring chairs', date: '2026-09-28T15:45:00Z', count: 2 },
+        { id: 't2', from: 'Church Office', subject: 'Missions update', snippet: '', date: '2026-09-27T15:00:00Z', count: 1 }
+      ]
+    },
     sync,
     errors: []
   };
 }
+
+const newTasks = () => [
+  { id: 'L1', title: 'My Tasks', items: [
+    { id: 'a', title: 'Order curriculum', notes: '', due: '2026-09-27', parent: '', position: '1' },
+    { id: 'a2', title: 'Get quote', notes: '', due: '', parent: 'a', position: '1' },
+    { id: 'b', title: 'Call Sam', notes: '', due: '2026-09-28', parent: '', position: '2' }
+  ] },
+  { id: 'L2', title: 'Church', items: [{ id: 'c', title: 'Missions budget', notes: '', due: '', parent: '', position: '1' }] }
+];
+
+const nwsAlerts = {
+  features: [
+    { properties: { event: 'Wind Advisory', severity: 'Moderate', messageType: 'Alert', headline: 'Wind Advisory until 6 PM', description: 'West winds 25 to 35 mph.', instruction: 'Secure outdoor objects.', ends: '2026-09-29T00:00:00Z', senderName: 'NWS Pueblo CO' } },
+    { properties: { event: 'Winter Storm Warning', severity: 'Severe', messageType: 'Update', headline: 'Heavy snow expected', description: 'Snow 8 to 14 inches.', ends: '2026-09-30T00:00:00Z' } },
+    { properties: { event: 'Winter Storm Warning', severity: 'Severe', messageType: 'Alert', description: 'duplicate', ends: '2026-09-30T00:00:00Z' } },
+    { properties: { event: 'Frost Advisory', severity: 'Minor', messageType: 'Cancel', ends: '2026-09-29T00:00:00Z' } }
+  ]
+};
 
 const hours = Array.from({ length: 48 }, (_, i) => `2026-09-${28 + Math.floor(i / 24)}T${String(i % 24).padStart(2, '0')}:00`);
 const forecast = {
@@ -81,18 +118,26 @@ async function run() {
   const browser = await chromium.launch();
 
   /** Opens the page with mocks. `backend` holds the fake server's sync store and records requests. */
-  async function open({ seed, backend = { sync: {}, gets: [], posts: [] }, viewport = { width: 1360, height: 1000 }, colorScheme = 'light', mobile = false }) {
+  async function open({ seed, backend = { sync: {}, gets: [], posts: [], tasks: newTasks() }, viewport = { width: 1360, height: 1000 }, colorScheme = 'light', mobile = false }) {
     const ctx = await browser.newContext({ viewport, colorScheme, timezoneId: TZ, isMobile: mobile, hasTouch: mobile });
     await ctx.clock.install({ time: NOW });
     await ctx.clock.resume();
     await ctx.route(/geocoding-api\.open-meteo\.com/, r => r.fulfill({ json: { results: [{ name: 'Cañon City', admin1: 'Colorado', country_code: 'US', latitude: 38.44, longitude: -105.24 }] } }));
     await ctx.route(/\/\/api\.open-meteo\.com/, r => r.fulfill({ json: forecast }));
+    await ctx.route(/api\.weather\.gov/, r => {
+      backend.alertUrl = r.request().url();
+      return r.fulfill({ json: backend.noExtras ? { features: [] } : nwsAlerts });
+    });
     await ctx.route(/script\.google\.com/, r => {
       const req = r.request();
       if (req.method() === 'POST') {
         const body = JSON.parse(req.postData());
         backend.posts.push(body);
         if (body.key !== 'secret') return r.fulfill({ json: { ok: false, error: 'unauthorized' } });
+        if (body.action === 'setTaskDone') return r.fulfill({ json: { ok: true } });
+        if (body.action === 'addTask') {
+          return r.fulfill({ json: { ok: true, task: { id: 'new', title: body.title, notes: '', due: '', parent: '', position: '0' } } });
+        }
         if (body.action === 'saveSync') {
           Object.entries(body.fields).forEach(([f, v]) => {
             if (!backend.sync[f] || v.at > backend.sync[f].at) backend.sync[f] = v;
@@ -104,7 +149,7 @@ async function run() {
       const url = new URL(req.url());
       backend.gets.push(url);
       if (url.searchParams.get('key') !== 'secret') return r.fulfill({ json: { ok: false, error: 'unauthorized' } });
-      return r.fulfill({ json: dashboard(JSON.parse(JSON.stringify(backend.sync))) });
+      return r.fulfill({ json: dashboard(JSON.parse(JSON.stringify(backend.sync)), backend) });
     });
     const page = await ctx.newPage();
     const errors = [];
@@ -163,6 +208,68 @@ async function run() {
     assert.match(await day(2).textContent(), /Nothing scheduled/);
     assert.strictEqual(await page.locator('script:not([src])').count(), 1, 'event titles are not inserted as HTML');
 
+    await shot(page, 'desktop', { fullPage: true });
+
+    // Join buttons: none on past events; the current one is highlighted.
+    assert.strictEqual(await day(0).locator('.event.past .join-btn').count(), 0);
+    assert.strictEqual(await day(0).locator('.event.now .join-btn.btn-primary').getAttribute('href'), 'https://meet.google.com/abc-defg-hij');
+    assert.strictEqual(await day(1).locator('.join-btn:not(.btn-primary)').count(), 1, 'later meetings get a plain Join button');
+
+    // Event details
+    await day(0).locator('.event.now .event-open').click();
+    const details = page.locator('#details-dialog');
+    assert(await details.isVisible());
+    assert.match(await details.locator('.details-when').textContent(), /Mon, Sep 28 · 10 AM – 11:30 AM/);
+    assert.strictEqual(await details.locator('.details-desc a').getAttribute('href'), 'https://docs.google.com/d/1', 'links in descriptions work, without trailing punctuation');
+    assert.strictEqual(await details.locator('.guests li').count(), 2);
+    assert.match(await details.textContent(), /Guests \(12\)/);
+    assert.match(await details.textContent(), /and 10 more/);
+    assert.match(await details.locator('.guests').textContent(), /Sam <b>Ortiz<\/b>/, 'guest names are shown as text');
+    assert.match(await details.locator('a[href*="google.com/maps"]').getAttribute('href'), /query=Room%20204/);
+    assert.strictEqual(await details.locator('a[href^="https://calendar.google.com"]').count(), 1);
+    await shot(page, 'event-details');
+    await details.locator('[data-close]').click();
+    await day(1).locator('.chip-btn').click();
+    assert.match(await page.textContent('#details-dialog .details-when'), /Mon, Sep 28 – Tue, Sep 29/, 'multi-day all-day event');
+    await page.locator('#details-dialog [data-close]').click();
+
+    // Tasks
+    assert(await page.isVisible('#tasks'));
+    assert(await page.isVisible('#nav-tasks'));
+    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['My Tasks 3', 'Church 1']);
+    assert.strictEqual(await page.locator('.task.sub').count(), 1);
+    assert.strictEqual(await page.locator('.task .due.overdue').count(), 1);
+    assert.strictEqual(await page.locator('.task .due.today').count(), 1);
+    await page.locator('input[data-task="b"]').check();
+    await waitFor(async () => backend.posts.some(p => p.action === 'setTaskDone'), 'setTaskDone POST');
+    assert.deepStrictEqual(backend.posts.find(p => p.action === 'setTaskDone'), { key: 'secret', action: 'setTaskDone', listId: 'L1', taskId: 'b', done: true });
+    assert.strictEqual(await page.locator('.task.done').count(), 1, 'stays briefly, crossed out');
+    await waitFor(async () => (await page.locator('input[data-task="b"]').count()) === 0, 'completed task removed');
+    await page.fill('#task-add input', 'Email the board');
+    await page.press('#task-add input', 'Enter');
+    await waitFor(async () => (await page.locator('.task-title').first().textContent()) === 'Email the board', 'new task shown first');
+    assert.strictEqual(backend.posts.find(p => p.action === 'addTask').listId, 'L1');
+    await page.click('#task-tabs [data-list="L2"]');
+    assert.strictEqual(await page.locator('.task-title').first().textContent(), 'Missions budget');
+
+    // Inbox
+    assert.strictEqual(await page.textContent('#inbox-count'), '7 unread');
+    assert.strictEqual(await page.locator('.thread').count(), 2);
+    assert.strictEqual(await page.getAttribute('.thread >> nth=0', 'href'), 'https://mail.google.com/mail/?authuser=me%40gmail.com#inbox/t1');
+    assert.match(await page.textContent('.thread-more'), /5 more unread/);
+
+    // Weather alerts: sorted by severity, duplicates and cancellations dropped.
+    assert.match(backend.alertUrl, /alerts\/active\?point=38\.4400,-105\.2400/);
+    const alertTexts = await page.locator('.alert-item').allTextContents();
+    assert.strictEqual(alertTexts.length, 2);
+    assert.match(alertTexts[0], /Winter Storm Warning until Tue 6 PM/);
+    assert.match(alertTexts[1], /Wind Advisory until 6 PM/);
+    assert.strictEqual(await page.locator('.alert-item.severe').count(), 1);
+    await page.click('.alert-item >> nth=1');
+    assert.strictEqual(await page.textContent('#alert-title'), 'Wind Advisory');
+    assert.match(await page.textContent('#alert-body'), /Secure outdoor objects\./);
+    await page.click('#alert-dialog [data-close]');
+
     // Devotional
     assert.strictEqual(await page.textContent('.devo-title'), 'The “Go” of Renunciation');
     await page.click('#devo-read');
@@ -177,7 +284,7 @@ async function run() {
     await page.click('#weather-dialog [data-close]');
 
     // News: empty categories are hidden; tabs switch.
-    assert.strictEqual(await page.locator('.tab').count(), 2);
+    assert.strictEqual(await page.locator('#news-tabs .tab').count(), 2);
     await page.click('.tab[data-tab="local"]');
     assert.match(await page.textContent('.headlines'), /Royal Gorge/);
 
@@ -213,6 +320,7 @@ async function run() {
     const backend = {
       gets: [],
       posts: [],
+      noExtras: true,
       sync: {
         name: { value: 'Miles', at: 1000 },
         city: { value: 'Cañon City, CO', at: 1000 },
@@ -236,6 +344,11 @@ async function run() {
     await page.click('#refresh-btn');
     await waitFor(async () => (await page.inputValue('#notes-text')) === 'Edited on the laptop later', 'remote edit applied');
 
+    assert(await page.isHidden('#tasks'), 'Tasks card hidden when the backend has no Tasks service');
+    assert(await page.isHidden('#nav-tasks'));
+    assert(await page.isHidden('#inbox'));
+    assert(await page.isHidden('#alerts'));
+    await shot(page, 'phone', { fullPage: true });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert(!overflow, 'no horizontal scrolling on a phone');
     assert.deepStrictEqual(errors, []);

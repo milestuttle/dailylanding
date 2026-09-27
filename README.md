@@ -1,11 +1,11 @@
 # DailyDash
 
-A personal start page for laptop and phone: today's schedule, the *My Utmost for His Highest* devotional, weather, news headlines, bookmarks, and a notes pad.
+A personal start page for laptop and phone: your schedule with meeting links, Google Tasks, unread Gmail, the *My Utmost for His Highest* devotional, weather with National Weather Service alerts, news headlines, bookmarks, and a notes pad.
 
 It has two parts:
 
 - **The page** (`index.html`, `app.js`, `styles.css`) is a static site on GitHub Pages. Weather comes directly from [Open-Meteo](https://open-meteo.com). Settings, bookmarks, and notes are saved in the browser.
-- **The backend** (`apps-script/`) is a Google Apps Script web app that runs under your Google account. It reads your calendars, fetches the devotional and news feeds, and adds events to your calendar.
+- **The backend** (`apps-script/`) is a Google Apps Script web app that runs under your Google account. It reads your calendars, tasks, and unread Gmail; fetches the devotional and news feeds; and adds events and tasks.
 
 The repo contains no calendar addresses or keys. Those are stored in the Apps Script project's properties and in your browser.
 
@@ -16,7 +16,7 @@ The repo contains no calendar addresses or keys. Those are stored in the Apps Sc
 1. Sign in to the Google account whose calendar you want to add events to, then open [script.google.com](https://script.google.com) and click **New project**. Name it "DailyDash backend".
 2. Click **Project Settings** (gear icon) and check **Show "appsscript.json" manifest file in editor**.
 3. In the **Editor**, replace the contents of `appsscript.json` with [`apps-script/appsscript.json`](apps-script/appsscript.json). Replace `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs). Save.
-4. Choose `setup` in the function menu and click **Run**. Approve the permissions (Calendar and "connect to an external service"). The execution log shows:
+4. Choose `setup` in the function menu and click **Run**. Approve the permissions: Calendar, Tasks, read-only Gmail, "connect to an external service", and running on a timer. The execution log shows:
    - an **API key**, which you'll paste into the page later, and
    - every calendar this account can read, each with its **id**.
 
@@ -85,6 +85,19 @@ After changing `Code.gs`, paste it into the Apps Script editor and save. Then go
 Until the secrets are set, the workflow runs the tests and skips the deploy with a warning.
 
 If a change adds a new permission to `appsscript.json`, the deploy still succeeds, but you need to run any function once in the editor and approve the permission before the web app can use it.
+
+## What each part uses
+
+| On the page | Comes from | Permission |
+| --- | --- | --- |
+| Schedule, Join buttons, event details | Google Calendar (Calendar API service), or a calendar's secret iCal address | Calendar |
+| Tasks | Google Tasks (Tasks service) | Tasks |
+| Inbox | Gmail (Gmail service), unread messages in your inbox | Gmail, read only |
+| Weather and alerts | Open-Meteo and the National Weather Service, straight from your browser | none |
+
+`appsscript.json` turns on the Calendar API, Tasks, and Gmail services. If you paste it by hand, they switch on when you save. The Tasks and Inbox cards only appear once those services work, and the page falls back to basic calendar details if the Calendar API service is off.
+
+**After updating the backend with new permissions**, run `testDashboard` once in the editor and approve them. The web app can't use a permission you haven't approved.
 
 ## Syncing between devices
 
