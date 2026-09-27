@@ -116,6 +116,17 @@ function testDashboard() {
   Logger.log('Errors: ' + JSON.stringify(data.errors));
 }
 
+/** Logs how utmost.org's page breaks down, for fixing the devotional parser. */
+function debugDevotional() {
+  const html = UrlFetchApp.fetch(DEVOTIONAL_URL, { muteHttpExceptions: true }).getContentText()
+    .replace(/<(script|style|svg|noscript)[\s\S]*?<\/\1>/gi, '');
+  const re = /<(title|h1|h2|h3|p|blockquote)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi;
+  let m;
+  let n = 0;
+  while ((m = re.exec(html)) && n++ < 40) Logger.log(m[1] + ': ' + htmlToText_(m[2]).slice(0, 160));
+  Logger.log('Parsed: ' + JSON.stringify(parseDevotional_(html), null, 2));
+}
+
 /* ------------------------------------------------------------------ */
 /* Dashboard                                                           */
 /* ------------------------------------------------------------------ */
@@ -130,7 +141,7 @@ function dashboard_(params) {
   const news = getNewsConfig_();
 
   const keys = {
-    devotional: 'devo:' + date,
+    devotional: 'devo2:' + date,
     news: 'news:' + hash_(JSON.stringify(news)),
     cal: calendarCacheKeys_(calendars, date, tz)
   };
@@ -186,7 +197,7 @@ function dashboard_(params) {
   }
 
   Object.keys(toCache).forEach(k => {
-    const ttl = k.indexOf('cal:') === 0 ? CACHE_SECONDS.calendar : k.indexOf('devo:') === 0 ? CACHE_SECONDS.devotional : CACHE_SECONDS.news;
+    const ttl = k.indexOf('cal:') === 0 ? CACHE_SECONDS.calendar : k.indexOf('devo2:') === 0 ? CACHE_SECONDS.devotional : CACHE_SECONDS.news;
     try { cache.put(k, toCache[k], ttl); } catch (err) { /* value too large to cache; fine */ }
   });
 
@@ -591,48 +602,55 @@ function dayParts_(day) {
 /* Devotional (utmost.org)                                             */
 /* ------------------------------------------------------------------ */
 
-const VERSE_RE = /^[“"](.+?)[”"]?\s*[—–-]+\s*((?:[1-3]\s?)?[A-Z][A-Za-z]+(?:\s(?:of\s)?[A-Z][a-z]+)*\s+\d+:\d+(?:[-–,]\s?\d+(?::\d+)?)*(?:\s\([A-Z]+\))?)\s*$/;
-const BOILERPLATE_RE = /©|copyright|all rights reserved|sign up|subscribe|newsletter|cookie|privacy|bible in one year|wisdom from oswald|our daily bread ministries|download|podcast/i;
+// A Bible reference such as "Luke 9:57", "1 John 3:2-3", or "Song of Songs 2:4 (NIV)".
+const REF_SRC = '((?:[1-3]\\s?)?[A-Z][A-Za-z]+(?:\\s(?:of\\s)?[A-Z][a-z]+)*\\s+\\d+:\\d+(?:\\s?[-–,]\\s?\\d+(?::\\d+)?)*(?:\\s\\([A-Z]+\\))?)';
+// Verse text followed by a dash and the reference, e.g. 'As they were walking… “I will follow you.” — Luke 9:57'.
+const VERSE_RE = new RegExp('^(.{10,600}?)\\s*(?:[—–]|\\s-)\\s*' + REF_SRC + '\\s*$');
+const BOILERPLATE_RE = /©|copyright|all rights reserved|sign up|subscribe|newsletter|cookie|privacy|bible in one year|oswald chambers|our daily bread|download|podcast/i;
+// Headings that belong to the site rather than to the day's reading.
+const GENERIC_TITLE_RE = /utmost for his highest|^(today|home|menu|search|language|editions?|modern classic|updated classic|classic|compare|about|resources|donate|explore)$/i;
 
 function parseDevotional_(html) {
   if (!html) return null;
+  html = html.replace(/<(script|style|svg|noscript)[\s\S]*?<\/\1>/gi, '');
   const meta = name => {
     const m = html.match(new RegExp('<meta[^>]+(?:property|name)=["\']' + name + '["\'][^>]+content=["\']([^"\']*)["\']', 'i'))
       || html.match(new RegExp('<meta[^>]+content=["\']([^"\']*)["\'][^>]+(?:property|name)=["\']' + name + '["\']', 'i'));
     return m ? htmlToText_(m[1]) : '';
   };
   const url = meta('og:url') || DEVOTIONAL_URL;
+  const firstMatch = (re, s) => { const m = s.match(re); return m ? htmlToText_(m[1]) : ''; };
+  const allMatches = (re, s) => { const out = []; let m; while ((m = re.exec(s))) out.push(htmlToText_(m[2] || m[1])); return out; };
 
   // Prefer the article body when the page marks one.
-  const body = (html.match(/<article[\s\S]*?<\/article>/i) || html.match(/class=["'][^"']*entry-content[\s\S]*$/i) || [html])[0];
+  const body = (html.match(/<article[\s>][\s\S]*?<\/article>/i) || html.match(/class=["'][^"']*entry-content[\s\S]*$/i) || [html])[0];
 
-  // The page title minus the site name; the site's own logo heading doesn't count.
-  const h1 = s => { const m = s.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i); return m ? htmlToText_(m[1]) : ''; };
-  const title = [meta('og:title').split(/\s[|–-]\s/)[0], h1(body), h1(html)]
-    .filter(t => t && !/utmost for his highest/i.test(t))[0] || '';
+  // Title: the first candidate that isn't the site name or a menu label.
+  const siteSuffix = t => t.split(/\s[|–—-]\s/)[0].trim();
+  const title = [siteSuffix(meta('og:title')), siteSuffix(firstMatch(/<title[^>]*>([\s\S]*?)<\/title>/i, html))]
+    .concat(allMatches(/<(h1|h2)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi, body))
+    .filter(t => t && t.length <= 120 && !GENERIC_TITLE_RE.test(t))[0] || '';
+
+  // Paragraphs. The tag test needs a space or ">" after the name so <path> and <picture> don't count.
   const blocks = [];
-  const re = /<(p|blockquote)[^>]*>([\s\S]*?)<\/\1>/gi;
-  let m;
-  while ((m = re.exec(body))) {
-    const text = htmlToText_(m[2]);
-    if (text.length >= 20 && !BOILERPLATE_RE.test(text) && blocks.indexOf(text) === -1) blocks.push(text);
-  }
-
   let verseText = '';
   let verseRef = '';
-  for (let i = 0; i < Math.min(blocks.length, 4); i++) {
-    const v = blocks[i].match(VERSE_RE);
-    if (v) {
-      verseText = v[1].trim();
-      verseRef = v[2].trim();
-      blocks.splice(i, 1);
-      break;
+  allMatches(/<(p|blockquote)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi, body).forEach(text => {
+    if (!verseRef) {
+      // The verse may share a block with the byline ("By Oswald Chambers As they were walking…").
+      const afterByline = text.replace(/^[\s\S]*\bBy Oswald Chambers\s*/i, '');
+      const v = afterByline.match(VERSE_RE);
+      if (v) {
+        verseText = v[1].trim().replace(/^[“"]([^“”"]*)[”"]$/, '$1');
+        verseRef = v[2].trim();
+        return;
+      }
     }
-  }
+    if (text.length >= 60 && !BOILERPLATE_RE.test(text) && blocks.indexOf(text) === -1) blocks.push(text);
+  });
 
-  const paragraphs = blocks.filter(t => t.length >= 60);
-  if (!title || paragraphs.length < 2) return null;
-  return { title: title, verseText: verseText, verseRef: verseRef, paragraphs: paragraphs, url: url };
+  if (!title || blocks.length < 2) return null;
+  return { title: title, verseText: verseText, verseRef: verseRef, paragraphs: blocks, url: url };
 }
 
 /* ------------------------------------------------------------------ */
