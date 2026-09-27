@@ -4,7 +4,7 @@ A personal start page for laptop and phone: your schedule with meeting links, Go
 
 It has two parts:
 
-- **The page** (`index.html`, `app.js`, `styles.css`) is a static site on GitHub Pages. Weather comes directly from [Open-Meteo](https://open-meteo.com). Settings, bookmarks, and notes are saved in the browser.
+- **The page** (`index.html`, `app.js`, `styles.css`) is a static site on GitHub Pages. Weather comes directly from the [National Weather Service](https://www.weather.gov). Settings, bookmarks, and notes are saved in the browser.
 - **The backend** (`apps-script/`) is a Google Apps Script web app that runs under your Google account. It reads your calendars, tasks, and unread Gmail; fetches the devotional and news feeds; and adds events and tasks.
 
 The repo contains no calendar addresses or keys. Those are stored in the Apps Script project's properties and in your browser.
