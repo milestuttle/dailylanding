@@ -51,10 +51,20 @@ const DEFAULT_NEWS = [
 const DEVOTIONAL_URL = 'https://utmost.org/modern-classic/today/';
 const NEWS_PER_CATEGORY = 8;
 // The background timer refreshes every 10 minutes; these outlast it so the page always hits the cache.
-const CACHE_SECONDS = { calendar: 1200, devotional: 21600, news: 1800 };
+const CACHE_SECONDS = { calendar: 1200, devotional: 21600, news: 1800, tasks: 300, inbox: 180 };
 const WARM_EVERY_MINUTES = 10;
 const WARM_HOURS = { from: 5, to: 23 }; // skip overnight to save your daily Apps Script quota
 const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes'];
+const MAX_DESCRIPTION_CHARS = 2000;
+const MAX_ATTENDEES = 30;
+const INBOX_THREADS = 5;
+// Video meeting links recognized in event locations and descriptions.
+const JOIN_URL_RES = [
+  /https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i,
+  /https:\/\/[\w.-]*zoom\.us\/(?:j|my|w|s)\/[^\s<>"')\]]+/i,
+  /https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s<>"')\]]+/i,
+  /https:\/\/[\w.-]*webex\.com\/[^\s<>"')\]]+/i
+];
 
 /* ------------------------------------------------------------------ */
 /* Entry points                                                        */
@@ -74,6 +84,8 @@ function doPost(e) {
   return respond_(body, params => {
     if (params.action === 'addEvent') return addEvent_(params);
     if (params.action === 'saveSync') return saveSync_(params);
+    if (params.action === 'addTask') return addTask_(params);
+    if (params.action === 'setTaskDone') return setTaskDone_(params);
     throw new Error('Unknown action');
   });
 }
@@ -123,6 +135,8 @@ function testDashboard() {
   Logger.log('Events: ' + JSON.stringify(data.events, null, 2));
   Logger.log('Devotional: ' + JSON.stringify(data.devotional, null, 2));
   Logger.log('News: ' + data.news.map(c => c.label + ' (' + c.items.length + ')').join(', '));
+  Logger.log('Tasks: ' + (data.tasks ? data.tasks.map(l => l.title + ' (' + l.items.length + ')').join(', ') : 'Tasks service not enabled'));
+  Logger.log('Gmail: ' + (data.inbox ? data.inbox.unread + ' unread in ' + data.inbox.email : 'Gmail service not enabled'));
   Logger.log('Errors: ' + JSON.stringify(data.errors));
 }
 
@@ -174,9 +188,11 @@ function dashboard_(params) {
   const keys = {
     devotional: 'devo2:' + date,
     news: 'news:' + hash_(JSON.stringify(news)),
-    cal: calendarCacheKeys_(calendars, date, tz, days)
+    cal: calendarCacheKeys_(calendars, date, tz, days),
+    tasks: 'tasks',
+    inbox: 'inbox'
   };
-  const cached = refresh ? {} : cache.getAll([keys.devotional, keys.news].concat(keys.cal));
+  const cached = refresh ? {} : cache.getAll([keys.devotional, keys.news, keys.tasks, keys.inbox].concat(keys.cal));
   const fromCache = k => (cached[k] ? JSON.parse(cached[k]) : undefined);
 
   // Collect every URL we still need, then fetch them in one parallel batch.
@@ -188,7 +204,7 @@ function dashboard_(params) {
   const toCache = {};
 
   // Calendar
-  const range = { start: zonedToUtc_(date, '00:00', tz), end: zonedToUtc_(addDays_(date, days), '00:00', tz) };
+  const range = { start: zonedToUtc_(date, '00:00', tz), end: zonedToUtc_(addDays_(date, days), '00:00', tz), tz: tz };
   let events = [];
   calendars.forEach((cfg, i) => {
     let list = fromCache(keys.cal[i]);
@@ -227,8 +243,38 @@ function dashboard_(params) {
     if (newsOut.some(c => c.items.length)) toCache[keys.news] = JSON.stringify(newsOut);
   }
 
+  // Tasks and Gmail (skipped by the background timer; they're quick and change often)
+  let tasks = null;
+  let inbox = null;
+  if (!params.warm) {
+    tasks = fromCache(keys.tasks);
+    if (tasks === undefined) {
+      try {
+        tasks = taskLists_();
+        if (tasks) toCache[keys.tasks] = JSON.stringify(tasks);
+      } catch (err) {
+        errors.push('Tasks: ' + err.message);
+        tasks = null;
+      }
+    }
+    inbox = fromCache(keys.inbox);
+    if (inbox === undefined) {
+      try {
+        inbox = inbox_();
+        if (inbox) toCache[keys.inbox] = JSON.stringify(inbox);
+      } catch (err) {
+        errors.push('Gmail: ' + err.message);
+        inbox = null;
+      }
+    }
+  }
+
   Object.keys(toCache).forEach(k => {
-    const ttl = k.indexOf('cal:') === 0 ? CACHE_SECONDS.calendar : k.indexOf('devo2:') === 0 ? CACHE_SECONDS.devotional : CACHE_SECONDS.news;
+    const ttl = k.indexOf('cal') === 0 ? CACHE_SECONDS.calendar
+      : k.indexOf('devo') === 0 ? CACHE_SECONDS.devotional
+      : k === 'tasks' ? CACHE_SECONDS.tasks
+      : k === 'inbox' ? CACHE_SECONDS.inbox
+      : CACHE_SECONDS.news;
     try { cache.put(k, toCache[k], ttl); } catch (err) { /* value too large to cache; fine */ }
   });
 
@@ -240,6 +286,8 @@ function dashboard_(params) {
     events: events,
     devotional: devotional,
     news: newsOut,
+    tasks: tasks,
+    inbox: inbox,
     sync: params.warm ? undefined : readSync_(),
     errors: errors
   };
@@ -308,7 +356,7 @@ function validSyncValue_(field, value) {
 }
 
 function calendarCacheKeys_(calendars, date, tz, days) {
-  return calendars.map(cfg => 'cal:' + hash_(JSON.stringify(cfg) + date + tz + days));
+  return calendars.map(cfg => 'cal2:' + hash_(JSON.stringify(cfg) + date + tz + days));
 }
 
 function hash_(s) {
@@ -349,18 +397,103 @@ function openCalendar_(cfg) {
   return cal;
 }
 
+/**
+ * Events from a Google calendar. Uses the Calendar API advanced service when it's
+ * enabled (it has Meet links and full attendee details), else CalendarApp.
+ */
 function googleCalendarEvents_(cfg, range) {
+  if (typeof Calendar === 'undefined') return calendarAppEvents_(cfg, range);
+  const out = [];
+  let pageToken;
+  do {
+    const res = Calendar.Events.list(cfg.id || 'primary', {
+      timeMin: new Date(range.start).toISOString(),
+      timeMax: new Date(range.end).toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+      pageToken: pageToken
+    });
+    (res.items || []).forEach(ev => {
+      const e = apiEvent_(ev, range.tz);
+      if (e) out.push(e);
+    });
+    pageToken = res.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
+/** Converts a Calendar API event; returns null for cancelled or declined ones. */
+function apiEvent_(ev, tz) {
+  if (ev.status === 'cancelled') return null;
+  const attendees = ev.attendees || [];
+  const me = attendees.filter(a => a.self)[0];
+  if (me && me.responseStatus === 'declined') return null;
+  const allDay = !!(ev.start && ev.start.date);
+  const start = allDay ? zonedToUtc_(ev.start.date, '00:00', tz) : new Date(ev.start.dateTime).getTime();
+  const end = allDay ? zonedToUtc_(ev.end.date, '00:00', tz) : new Date(ev.end.dateTime).getTime();
+  const description = descriptionToText_(ev.description || '');
+  const video = ((ev.conferenceData && ev.conferenceData.entryPoints) || []).filter(p => p.entryPointType === 'video')[0];
+  return {
+    title: ev.summary || '(No title)',
+    start: new Date(start).toISOString(),
+    end: new Date(end).toISOString(),
+    allDay: allDay,
+    location: ev.location || '',
+    description: description,
+    joinUrl: ev.hangoutLink || (video && video.uri) || findJoinUrl_((ev.location || '') + '\n' + description),
+    attendees: attendees.slice(0, MAX_ATTENDEES).map(a => ({
+      name: a.displayName || a.email || '',
+      status: a.responseStatus || 'needsAction',
+      organizer: !!a.organizer
+    })),
+    attendeeCount: attendees.length,
+    link: ev.htmlLink || ''
+  };
+}
+
+function calendarAppEvents_(cfg, range) {
   return openCalendar_(cfg).getEvents(new Date(range.start), new Date(range.end))
     .filter(ev => {
       try { return ev.getMyStatus() !== CalendarApp.GuestStatus.NO; } catch (err) { return true; }
     })
-    .map(ev => ({
-      title: ev.getTitle() || '(No title)',
-      start: ev.getStartTime().toISOString(),
-      end: ev.getEndTime().toISOString(),
-      allDay: ev.isAllDayEvent(),
-      location: ev.getLocation() || ''
-    }));
+    .map(ev => {
+      const description = descriptionToText_(ev.getDescription() || '');
+      const guests = ev.getGuestList();
+      return {
+        title: ev.getTitle() || '(No title)',
+        start: ev.getStartTime().toISOString(),
+        end: ev.getEndTime().toISOString(),
+        allDay: ev.isAllDayEvent(),
+        location: ev.getLocation() || '',
+        description: description,
+        joinUrl: findJoinUrl_((ev.getLocation() || '') + '\n' + description),
+        attendees: guests.slice(0, MAX_ATTENDEES).map(g => ({
+          name: g.getName() || g.getEmail(),
+          status: guestStatus_(String(g.getGuestStatus())),
+          organizer: false
+        })),
+        attendeeCount: guests.length,
+        link: ''
+      };
+    });
+}
+
+function guestStatus_(s) {
+  s = s.toUpperCase();
+  return s === 'YES' || s === 'ACCEPTED' ? 'accepted'
+    : s === 'NO' || s === 'DECLINED' ? 'declined'
+    : s === 'MAYBE' || s === 'TENTATIVE' ? 'tentative'
+    : 'needsAction';
+}
+
+/** The first video meeting link in some text, or ''. */
+function findJoinUrl_(text) {
+  for (let i = 0; i < JOIN_URL_RES.length; i++) {
+    const m = String(text || '').match(JOIN_URL_RES[i]);
+    if (m) return m[0].replace(/[.,;]+$/, '');
+  }
+  return '';
 }
 
 function addEvent_(p) {
@@ -388,6 +521,105 @@ function addEvent_(p) {
   // The page reloads with refresh=1 after adding; this clears what other devices see.
   cache.removeAll(calendarCacheKeys_(calendars, p.viewDate || p.date, tz, p.days || 1));
   return { id: ev.getId() };
+}
+
+/* ------------------------------------------------------------------ */
+/* Google Tasks (Tasks advanced service)                               */
+/* ------------------------------------------------------------------ */
+
+/** Incomplete tasks in each of your lists, subtasks after their parent. Null if Tasks isn't enabled. */
+function taskLists_() {
+  if (typeof Tasks === 'undefined') return null;
+  return (Tasks.Tasklists.list({ maxResults: 20 }).items || []).map(list => {
+    const items = [];
+    let pageToken;
+    do {
+      const res = Tasks.Tasks.list(list.id, { showCompleted: false, showHidden: false, maxResults: 100, pageToken: pageToken });
+      (res.items || []).forEach(t => {
+        if (t.title && t.title.trim()) items.push(taskOut_(t));
+      });
+      pageToken = res.nextPageToken;
+    } while (pageToken);
+    return { id: list.id, title: list.title, items: orderTasks_(items) };
+  });
+}
+
+function taskOut_(t) {
+  return {
+    id: t.id,
+    title: t.title,
+    notes: (t.notes || '').slice(0, 500),
+    due: t.due ? t.due.slice(0, 10) : '', // Tasks stores due dates as midnight UTC
+    parent: t.parent || '',
+    position: t.position || ''
+  };
+}
+
+/** Top-level tasks by position, each followed by its subtasks. */
+function orderTasks_(items) {
+  const byPos = (a, b) => a.position.localeCompare(b.position);
+  const ids = {};
+  items.forEach(t => { ids[t.id] = true; });
+  const out = [];
+  items.filter(t => !t.parent || !ids[t.parent]).sort(byPos).forEach(top => {
+    out.push(top);
+    items.filter(t => t.parent === top.id).sort(byPos).forEach(sub => out.push(sub));
+  });
+  return out;
+}
+
+function requireTasks_() {
+  if (typeof Tasks === 'undefined') throw new Error('The Tasks service is not enabled in Apps Script');
+  CacheService.getScriptCache().remove('tasks');
+}
+
+function addTask_(p) {
+  requireTasks_();
+  const title = String(p.title || '').trim();
+  if (!p.listId || !title) throw new Error('A list and a title are required');
+  const task = { title: title };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(p.due || '')) task.due = p.due + 'T00:00:00.000Z';
+  return { task: taskOut_(Tasks.Tasks.insert(task, p.listId)) };
+}
+
+function setTaskDone_(p) {
+  requireTasks_();
+  if (!p.listId || !p.taskId) throw new Error('A list and a task are required');
+  const patch = p.done ? { status: 'completed' } : { status: 'needsAction', completed: null };
+  Tasks.Tasks.patch(patch, p.listId, p.taskId);
+  return {};
+}
+
+/* ------------------------------------------------------------------ */
+/* Gmail (Gmail advanced service, read-only)                           */
+/* ------------------------------------------------------------------ */
+
+/** Unread inbox count and the newest unread conversations. Null if Gmail isn't enabled. */
+function inbox_() {
+  if (typeof Gmail === 'undefined') return null;
+  const email = Gmail.Users.getProfile('me').emailAddress;
+  const unread = Gmail.Users.Labels.get('me', 'INBOX').threadsUnread || 0;
+  const list = Gmail.Users.Threads.list('me', { q: 'is:unread in:inbox', maxResults: INBOX_THREADS });
+  const threads = (list.threads || []).map(t => {
+    const thread = Gmail.Users.Threads.get('me', t.id, { format: 'metadata', metadataHeaders: ['From', 'Subject'] });
+    const last = thread.messages[thread.messages.length - 1];
+    const header = name => ((last.payload.headers || []).filter(h => h.name.toLowerCase() === name.toLowerCase())[0] || {}).value || '';
+    return {
+      id: t.id,
+      from: senderName_(header('From')),
+      subject: header('Subject') || '(no subject)',
+      snippet: decodeEntities_(last.snippet || '').slice(0, 160),
+      date: new Date(Number(last.internalDate)).toISOString(),
+      count: thread.messages.length
+    };
+  });
+  return { email: email, unread: unread, threads: threads };
+}
+
+/** "Jane Doe <jane@x.org>" → "Jane Doe"; a bare address stays as is. */
+function senderName_(from) {
+  const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  return m ? (m[1].trim() || m[2]) : from.trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -443,7 +675,12 @@ function icalEventsInRange_(text, range, tz, myEmail) {
         start: new Date(startMs).toISOString(),
         end: new Date(startMs + ev.durationMs).toISOString(),
         allDay: ev.allDay,
-        location: ev.location
+        location: ev.location,
+        description: ev.description,
+        joinUrl: ev.joinUrl,
+        attendees: ev.attendees.slice(0, MAX_ATTENDEES),
+        attendeeCount: ev.attendees.length,
+        link: ''
       });
     });
   });
@@ -492,11 +729,27 @@ function parseVevent_(block, defaultTz) {
   const declinedBy = (props.ATTENDEE || [])
     .filter(a => (a.params.PARTSTAT || '').toUpperCase() === 'DECLINED')
     .map(a => a.value.replace(/^mailto:/i, '').toLowerCase());
+  const organizer = first('ORGANIZER');
+  const organizerEmail = organizer ? organizer.value.replace(/^mailto:/i, '').toLowerCase() : '';
+  const attendees = (props.ATTENDEE || []).map(a => {
+    const email = a.value.replace(/^mailto:/i, '');
+    return {
+      name: a.params.CN && a.params.CN !== email ? a.params.CN : email,
+      status: guestStatus_((a.params.PARTSTAT || 'NEEDS-ACTION').replace('NEEDS-ACTION', 'needsAction')),
+      organizer: email.toLowerCase() === organizerEmail
+    };
+  });
+  const location = unescapeIcal_(first('LOCATION') ? first('LOCATION').value : '');
+  const description = descriptionToText_(unescapeIcalText_(first('DESCRIPTION') ? first('DESCRIPTION').value : ''));
+  const conference = first('X-GOOGLE-CONFERENCE');
 
   return {
     uid: first('UID') ? first('UID').value : '',
     summary: unescapeIcal_(first('SUMMARY') ? first('SUMMARY').value : ''),
-    location: unescapeIcal_(first('LOCATION') ? first('LOCATION').value : ''),
+    location: location,
+    description: description,
+    joinUrl: (conference && conference.value) || findJoinUrl_(location + '\n' + description),
+    attendees: attendees,
     cancelled: !!status && status.value.toUpperCase() === 'CANCELLED',
     start: start,
     allDay: start.allDay,
@@ -639,6 +892,11 @@ function occurrenceIndex_(rule, startDay, day) {
 
 function unescapeIcal_(s) {
   return s.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+}
+
+/** Like unescapeIcal_, but keeps line breaks (for descriptions). */
+function unescapeIcalText_(s) {
+  return s.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1').trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -801,15 +1059,37 @@ const ENTITIES = {
   rdquo: '”', ldquo: '“', mdash: '—', ndash: '–', hellip: '…', eacute: 'é', ntilde: 'ñ'
 };
 
-function htmlToText_(s) {
+function decodeEntities_(s) {
   return String(s)
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&([a-z]+);/gi, (all, name) => (ENTITIES[name.toLowerCase()] !== undefined ? ENTITIES[name.toLowerCase()] : all));
+}
+
+function htmlToText_(s) {
+  return decodeEntities_(String(s)
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
     .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
-    .replace(/&([a-z]+);/gi, (all, name) => (ENTITIES[name.toLowerCase()] !== undefined ? ENTITIES[name.toLowerCase()] : all))
+    .replace(/<[^>]+>/g, ''))
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Event descriptions may be plain text or light HTML; returns readable text with line breaks. */
+function descriptionToText_(s) {
+  if (!s) return '';
+  const text = decodeEntities_(String(s)
+    .replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (all, href, label) => {
+      const l = label.replace(/<[^>]+>/g, '').trim();
+      return !l || l === href || href.indexOf(l) !== -1 ? href : l + ' (' + href + ')';
+    })
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, ''))
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text.length > MAX_DESCRIPTION_CHARS ? text.slice(0, MAX_DESCRIPTION_CHARS).trim() + '…' : text;
 }

@@ -22,9 +22,11 @@ const scriptProperties = {
 };
 const PropertiesService = { getScriptProperties: () => scriptProperties };
 const LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
-const ctx = vm.createContext({ Utilities, PropertiesService, LockService, console });
+const cacheRemoved = [];
+const CacheService = { getScriptCache: () => ({ remove: k => cacheRemoved.push(k) }) };
+const ctx = vm.createContext({ Utilities, PropertiesService, LockService, CacheService, console });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8')
-  + '\n;this.api={icalEventsInRange_,zonedToUtc_,addDays_,parseFeed_,parseDevotional_,saveSync_,readSync_};', ctx);
+  + '\n;this.api={icalEventsInRange_,zonedToUtc_,addDays_,parseFeed_,parseDevotional_,saveSync_,readSync_,findJoinUrl_,descriptionToText_,apiEvent_,taskLists_,addTask_,setTaskDone_,inbox_,senderName_};', ctx);
 const api = ctx.api;
 const TZ = 'America/Denver';
 const range = d => ({ start: api.zonedToUtc_(d, '00:00', TZ), end: api.zonedToUtc_(api.addDays_(d, 1), '00:00', TZ) });
@@ -228,4 +230,123 @@ console.log('live-shaped devotional ok');
   assert.strictEqual([...props.keys()].filter(k => /^SYNC_\d+$/.test(k)).length, Number(props.get('SYNC_CHUNKS')));
   assert.throws(() => api.saveSync_({ fields: { notes: { value: 'x'.repeat(400000), at: 600 } } }), /too long/);
   console.log('sync ok');
+}
+
+// Event details: meeting links, descriptions, attendees
+{
+  assert.strictEqual(api.findJoinUrl_('Join: https://meet.google.com/abc-defg-hij.'), 'https://meet.google.com/abc-defg-hij');
+  assert.strictEqual(api.findJoinUrl_('Zoom https://ccsd.zoom.us/j/123456789?pwd=abc) now'), 'https://ccsd.zoom.us/j/123456789?pwd=abc');
+  assert.strictEqual(api.findJoinUrl_('https://teams.microsoft.com/l/meetup-join/19%3ameeting_x/0?context=y'), 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_x/0?context=y');
+  assert.strictEqual(api.findJoinUrl_('Room 204'), '');
+
+  assert.strictEqual(api.descriptionToText_('Agenda:<br><ul><li>Budget</li><li>Staffing</li></ul>See <a href="https://docs.google.com/x">the doc</a> &amp; notes'),
+    'Agenda:\n• Budget\n• Staffing\nSee the doc (https://docs.google.com/x) & notes');
+  assert.strictEqual(api.descriptionToText_('<a href="https://zoom.us/j/1">https://zoom.us/j/1</a>'), 'https://zoom.us/j/1');
+  assert.strictEqual(api.descriptionToText_('x'.repeat(3000)).length, 2001);
+
+  // iCal feed fields
+  const ics = [
+    'BEGIN:VCALENDAR', 'X-WR-TIMEZONE:America/Denver', 'BEGIN:VEVENT', 'UID:m1', 'SUMMARY:Principals meeting',
+    'DTSTART;TZID=America/Denver:20260928T090000', 'DTEND;TZID=America/Denver:20260928T100000',
+    'LOCATION:District Office\\, Board Room',
+    'DESCRIPTION:Agenda:\\n1. Budget\\n2. Staffing\\nJoin: https://meet.google.com/abc-defg-hij',
+    'X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij',
+    'ORGANIZER;CN=Pat Lee:mailto:pat@district.org',
+    'ATTENDEE;CN=Pat Lee;PARTSTAT=ACCEPTED:mailto:pat@district.org',
+    'ATTENDEE;CN=Sam Ortiz;PARTSTAT=TENTATIVE:mailto:sam@district.org',
+    'ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:jo@district.org',
+    'END:VEVENT', 'END:VCALENDAR'
+  ].join('\r\n');
+  const [ev] = [...api.icalEventsInRange_(ics, range('2026-09-28'), TZ)].map(e => JSON.parse(JSON.stringify(e)));
+  assert.strictEqual(ev.location, 'District Office, Board Room');
+  assert.strictEqual(ev.description, 'Agenda:\n1. Budget\n2. Staffing\nJoin: https://meet.google.com/abc-defg-hij');
+  assert.strictEqual(ev.joinUrl, 'https://meet.google.com/abc-defg-hij');
+  assert.deepStrictEqual(ev.attendees, [
+    { name: 'Pat Lee', status: 'accepted', organizer: true },
+    { name: 'Sam Ortiz', status: 'tentative', organizer: false },
+    { name: 'jo@district.org', status: 'needsAction', organizer: false }
+  ]);
+  assert.strictEqual(ev.attendeeCount, 3);
+
+  // Calendar API events
+  const apiEv = JSON.parse(JSON.stringify(api.apiEvent_({
+    summary: 'Coffee', htmlLink: 'https://calendar.google.com/event?eid=x', hangoutLink: 'https://meet.google.com/xyz-abcd-efg',
+    start: { dateTime: '2026-09-28T09:00:00-06:00' }, end: { dateTime: '2026-09-28T09:30:00-06:00' },
+    attendees: [{ email: 'me@gmail.com', self: true, responseStatus: 'accepted' }, { email: 'sam@x.org', displayName: 'Sam', responseStatus: 'needsAction', organizer: true }]
+  }, TZ)));
+  assert.strictEqual(apiEv.start, '2026-09-28T15:00:00.000Z');
+  assert.strictEqual(apiEv.joinUrl, 'https://meet.google.com/xyz-abcd-efg');
+  assert.strictEqual(apiEv.link, 'https://calendar.google.com/event?eid=x');
+  assert.deepStrictEqual(apiEv.attendees[1], { name: 'Sam', status: 'needsAction', organizer: true });
+  const allDay = api.apiEvent_({ summary: 'Break', start: { date: '2026-09-28' }, end: { date: '2026-09-30' } }, TZ);
+  assert.strictEqual(allDay.allDay, true);
+  assert.strictEqual(allDay.start, '2026-09-28T06:00:00.000Z');
+  assert.strictEqual(allDay.end, '2026-09-30T06:00:00.000Z');
+  assert.strictEqual(api.apiEvent_({ summary: 'No', start: { date: '2026-09-28' }, end: { date: '2026-09-29' }, attendees: [{ self: true, responseStatus: 'declined' }] }, TZ), null);
+  assert.strictEqual(api.apiEvent_({ status: 'cancelled' }, TZ), null);
+  const zoomInDescription = api.apiEvent_({ summary: 'Z', description: 'Join <a href="https://us02web.zoom.us/j/555">here</a>', start: { dateTime: '2026-09-28T09:00:00Z' }, end: { dateTime: '2026-09-28T10:00:00Z' } }, TZ);
+  assert.strictEqual(zoomInDescription.joinUrl, 'https://us02web.zoom.us/j/555');
+  console.log('event details ok');
+}
+
+// Google Tasks
+{
+  assert.strictEqual(api.taskLists_(), null, 'null when the Tasks service is not enabled');
+  const calls = [];
+  ctx.Tasks = {
+    Tasklists: { list: () => ({ items: [{ id: 'L1', title: 'My Tasks' }, { id: 'L2', title: 'Church' }] }) },
+    Tasks: {
+      list: (listId, opts) => {
+        calls.push(['list', listId, opts.showCompleted]);
+        if (listId === 'L2') return { items: [] };
+        return { items: [
+          { id: 'b', title: 'Second', position: '002' },
+          { id: 'a', title: 'First', position: '001', due: '2026-09-28T00:00:00.000Z', notes: 'n' },
+          { id: 'a2', title: 'Sub of first', position: '001', parent: 'a' },
+          { id: 'blank', title: '  ', position: '003' }
+        ] };
+      },
+      insert: (task, listId) => { calls.push(['insert', listId, task]); return Object.assign({ id: 'new', position: '009' }, task); },
+      patch: (patch, listId, taskId) => { calls.push(['patch', listId, taskId, patch]); return {}; }
+    }
+  };
+  const lists = JSON.parse(JSON.stringify(api.taskLists_()));
+  assert.deepStrictEqual(lists.map(l => l.title), ['My Tasks', 'Church']);
+  assert.deepStrictEqual(lists[0].items.map(t => t.id), ['a', 'a2', 'b'], 'ordered by position, subtasks after parent, blanks dropped');
+  assert.strictEqual(lists[0].items[0].due, '2026-09-28');
+  assert.strictEqual(calls[0][2], false, 'completed tasks not requested');
+
+  const added = JSON.parse(JSON.stringify(api.addTask_({ listId: 'L1', title: ' Call Sam ', due: '2026-09-29' })));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls.find(c => c[0] === 'insert'))), ['insert', 'L1', { title: 'Call Sam', due: '2026-09-29T00:00:00.000Z' }]);
+  assert.strictEqual(added.task.title, 'Call Sam');
+  assert.throws(() => api.addTask_({ listId: 'L1', title: ' ' }), /required/);
+  api.setTaskDone_({ listId: 'L1', taskId: 'a', done: true });
+  api.setTaskDone_({ listId: 'L1', taskId: 'a', done: false });
+  const patches = calls.filter(c => c[0] === 'patch').map(c => c[3]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(patches)), [{ status: 'completed' }, { status: 'needsAction', completed: null }]);
+  assert(cacheRemoved.includes('tasks'), 'task changes clear the cached list');
+  delete ctx.Tasks;
+  console.log('tasks ok');
+}
+
+// Gmail
+{
+  assert.strictEqual(api.inbox_(), null, 'null when the Gmail service is not enabled');
+  ctx.Gmail = { Users: {
+    getProfile: () => ({ emailAddress: 'me@gmail.com' }),
+    Labels: { get: () => ({ threadsUnread: 12 }) },
+    Threads: {
+      list: (user, opts) => { assert.strictEqual(opts.q, 'is:unread in:inbox'); return { threads: [{ id: 't1' }] }; },
+      get: () => ({ messages: [
+        { internalDate: '1790000000000', snippet: 'old', payload: { headers: [] } },
+        { internalDate: '1790000600000', snippet: 'See you at 6 &amp; bring chairs', payload: { headers: [{ name: 'From', value: '"Liza Tuttle" <liza@gmail.com>' }, { name: 'Subject', value: 'Dinner' }] } }
+      ] })
+    }
+  } };
+  const inbox = JSON.parse(JSON.stringify(api.inbox_()));
+  assert.deepStrictEqual(inbox, { email: 'me@gmail.com', unread: 12, threads: [{ id: 't1', from: 'Liza Tuttle', subject: 'Dinner', snippet: 'See you at 6 & bring chairs', date: new Date(1790000600000).toISOString(), count: 2 }] });
+  assert.strictEqual(api.senderName_('bob@x.org'), 'bob@x.org');
+  assert.strictEqual(api.senderName_('<bob@x.org>'), 'bob@x.org');
+  delete ctx.Gmail;
+  console.log('gmail ok');
 }

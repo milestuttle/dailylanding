@@ -53,12 +53,16 @@
     <symbol id="i-fog" viewBox="0 0 24 24"><path d="M5 8h14M3 12h18M5 16h14M8 20h8"/></symbol>
     <symbol id="i-rain" viewBox="0 0 24 24"><path d="M16 13v8M8 13v8M12 15v8"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></symbol>
     <symbol id="i-snow" viewBox="0 0 24 24"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><path d="M8 16h.01M8 20h.01M12 18h.01M12 22h.01M16 16h.01M16 20h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
     <symbol id="i-storm" viewBox="0 0 24 24"><path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/><path d="m13 11-4 6h6l-4 6"/></symbol>
   </svg>
 
   <nav class="nav" aria-label="Sections">
     <a class="nav-link" href="#devotional"><svg class="icon"><use href="#i-book"/></svg><span>Devotional</span></a>
     <a class="nav-link" href="#schedule"><svg class="icon"><use href="#i-calendar"/></svg><span>Schedule</span></a>
+    <a class="nav-link" href="#tasks" id="nav-tasks" hidden><svg class="icon"><use href="#i-check"/></svg><span>Tasks</span></a>
     <a class="nav-link" href="#links"><svg class="icon"><use href="#i-bookmark"/></svg><span>Links</span></a>
     <a class="nav-link" href="#news"><svg class="icon"><use href="#i-news"/></svg><span>News</span></a>
     <a class="nav-link" href="#notes"><svg class="icon"><use href="#i-note"/></svg><span>Notes</span></a>
@@ -85,6 +89,8 @@
       </div>
     </header>
 
+    <div class="alerts" id="alerts" hidden></div>
+
     <div class="setup" id="setup" hidden>
       <p><strong>Connect your Google account</strong> to see today's calendar, the devotional, and news. It's a one-time setup of about ten minutes; the steps are in the <a href="https://github.com/milestuttle/dailylanding#setup" target="_blank" rel="noopener">README</a>.</p>
       <button class="btn btn-primary" type="button" data-open-settings>Open Settings</button>
@@ -106,9 +112,31 @@
           </div>
           <div id="schedule-body"></div>
         </section>
+
+        <section class="card" id="tasks" aria-labelledby="tasks-heading" hidden>
+          <div class="card-head">
+            <h2 id="tasks-heading"><svg class="icon"><use href="#i-check"/></svg>Tasks</h2>
+            <a class="btn btn-small btn-quiet" href="https://tasks.google.com/" target="_blank" rel="noopener">Google Tasks <svg class="icon"><use href="#i-external"/></svg></a>
+          </div>
+          <div class="tabs" id="task-tabs" role="tablist" aria-label="Task lists"></div>
+          <ul class="tasks" id="task-list"></ul>
+          <form class="task-add" id="task-add">
+            <input name="title" placeholder="Add a task" autocomplete="off" aria-label="New task" maxlength="500">
+            <button class="icon-btn" type="submit" aria-label="Add task"><svg class="icon"><use href="#i-plus"/></svg></button>
+          </form>
+        </section>
       </div>
 
       <div class="col">
+        <section class="card" id="inbox" aria-labelledby="inbox-heading" hidden>
+          <div class="card-head">
+            <h2 id="inbox-heading"><svg class="icon"><use href="#i-mail"/></svg>Inbox</h2>
+            <span class="count-badge" id="inbox-count" hidden></span>
+            <a class="btn btn-small btn-quiet" id="inbox-open" href="https://mail.google.com/" target="_blank" rel="noopener">Gmail <svg class="icon"><use href="#i-external"/></svg></a>
+          </div>
+          <ul class="threads" id="inbox-list"></ul>
+        </section>
+
         <section class="card" id="links" aria-labelledby="links-heading">
           <div class="card-head">
             <h2 id="links-heading"><svg class="icon"><use href="#i-bookmark"/></svg>Bookmarks</h2>
@@ -151,6 +179,28 @@
       <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
     </div>
     <div class="dialog-body reading" id="devo-dialog-body"></div>
+  </dialog>
+
+  <dialog class="dialog" id="details-dialog" aria-labelledby="details-title">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow" id="details-calendar"></p>
+        <h2 id="details-title"></h2>
+      </div>
+      <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dialog-body details" id="details-body"></div>
+  </dialog>
+
+  <dialog class="dialog dialog-wide" id="alert-dialog" aria-labelledby="alert-title">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow" id="alert-meta"></p>
+        <h2 id="alert-title"></h2>
+      </div>
+      <button class="icon-btn" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dialog-body alert-body" id="alert-body"></div>
   </dialog>
 
   <dialog class="dialog dialog-wide" id="weather-dialog" aria-labelledby="weather-dialog-title">

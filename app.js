@@ -35,6 +35,7 @@
     bookmarks: DEFAULT_BOOKMARKS,
     notes: '',
     newsTab: '',
+    taskList: '',
     place: null, // cached geocoding result: { query, name, lat, lon }
     // Sync bookkeeping: when each synced field was last edited, which ones
     // still need uploading, and whether this device has merged with the server yet.
@@ -48,6 +49,7 @@
   let settings = loadSettings();
   let data = readJson(DATA_KEY); // { fetchedAt, payload }
   let weather = null;
+  let alerts = [];
   let lastDate = localDate();
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -57,6 +59,8 @@
     initEvents();
     initNotes();
     initNews();
+    initTasks();
+    initDetails();
     initNav();
     tick();
     setInterval(tick, 20 * 1000);
@@ -121,6 +125,17 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const safeUrl = u => (/^https?:\/\//i.test(u || '') ? u : '#');
   const icon = (name, cls = '') => `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+
+  const linkify = text => esc(text).replace(/https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+
+  /** POSTs an action to the Apps Script (text/plain skips a CORS preflight it can't answer). */
+  const post = body => callApi(fetch(settings.apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ key: settings.apiKey }, body))
+  }));
+
+  const saveData = () => { if (data) writeJson(DATA_KEY, data); };
 
   function localDate(d = new Date()) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -231,6 +246,7 @@
       $('weather-desc').textContent = `${d.text} · H ${Math.round(weather.daily.temperature_2m_max[0])}° L ${Math.round(weather.daily.temperature_2m_min[0])}°`;
       $('weather-icon').innerHTML = `<use href="#i-${d.icon}"/>`;
       chip.disabled = false;
+      loadAlerts();
     } catch (e) {
       $('weather-temp').textContent = '--°';
       $('weather-desc').textContent = e.message || 'Weather unavailable';
@@ -346,6 +362,8 @@
     $('setup').hidden = connected();
     renderDevotional(payload);
     renderSchedule();
+    renderTasks(payload);
+    renderInbox(payload);
     renderNews(payload);
     if (!connected()) {
       setStatus('Not connected to Google yet');
@@ -476,17 +494,21 @@
     const renderDay = d => `
       <div class="agenda-day">
         <h3 class="agenda-day-label">${dayName(d)} <span class="muted">${d.date.toLocaleDateString('en-US', d.i < 2 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' })}</span></h3>
-        ${d.allDay.length ? `<ul class="all-day">${d.allDay.map(e => `<li>${dot(e)}${esc(e.title)}</li>`).join('')}</ul>` : ''}
+        ${d.allDay.length ? `<ul class="all-day">${d.allDay.map(e => `<li><button type="button" class="chip-btn" data-event="${events.indexOf(e)}">${dot(e)}${esc(e.title)}</button></li>`).join('')}</ul>` : ''}
         ${d.timed.length ? `<ol class="events">${d.timed.map(e => {
           const s = new Date(e.start);
           const end = new Date(e.end);
           const state = end <= now ? 'past' : s <= now ? 'now' : '';
+          const soon = s - now < 15 * 60000;
           return `<li class="event ${state}">
-            <span class="event-time">${fmtTime(s)}<span class="muted"> – ${fmtTime(end)}</span></span>
-            <span class="event-main">
-              <span class="event-title">${dot(e)}${esc(e.title)}${state === 'now' ? ' <span class="now-tag">Now</span>' : ''}</span>
-              ${e.location ? `<span class="event-loc muted">${esc(e.location)}</span>` : ''}
-            </span>
+            <button type="button" class="event-open" data-event="${events.indexOf(e)}">
+              <span class="event-time">${fmtTime(s)}<span class="muted"> – ${fmtTime(end)}</span></span>
+              <span class="event-main">
+                <span class="event-title">${dot(e)}${esc(e.title)}${state === 'now' ? ' <span class="now-tag">Now</span>' : ''}</span>
+                ${e.location ? `<span class="event-loc muted">${esc(e.location)}</span>` : ''}
+              </span>
+            </button>
+            ${e.joinUrl && state !== 'past' ? `<a class="btn btn-small join-btn ${soon ? 'btn-primary' : ''}" href="${esc(safeUrl(e.joinUrl))}" target="_blank" rel="noopener">${icon('video')}Join</a>` : ''}
           </li>`;
         }).join('')}</ol>` : ''}
         ${!d.allDay.length && !d.timed.length ? '<p class="muted small">Nothing scheduled</p>' : ''}
@@ -557,6 +579,244 @@
       }
     });
   }
+
+  /* ---------------------------------------------------------------- */
+  /* Event details                                                     */
+  /* ---------------------------------------------------------------- */
+
+  const GUEST_STATUS = { accepted: 'Going', tentative: 'Maybe', declined: 'Declined', needsAction: 'Invited' };
+
+  function initDetails() {
+    $('schedule-body').addEventListener('click', e => {
+      const btn = e.target.closest('[data-event]');
+      const payload = todayPayload();
+      if (!btn || !payload) return;
+      const ev = (payload.events || [])[Number(btn.dataset.event)];
+      if (ev) openDetails(ev);
+    });
+  }
+
+  function openDetails(e) {
+    const s = new Date(e.start);
+    const end = new Date(e.end);
+    const dateFmt = { weekday: 'short', month: 'short', day: 'numeric' };
+    let when;
+    if (e.allDay) {
+      const last = new Date(end.getTime() - 1);
+      when = localDate(last) === localDate(s)
+        ? `${s.toLocaleDateString('en-US', dateFmt)} · All day`
+        : `${s.toLocaleDateString('en-US', dateFmt)} – ${last.toLocaleDateString('en-US', dateFmt)}`;
+    } else {
+      when = `${s.toLocaleDateString('en-US', dateFmt)} · ${fmtTime(s)} – ${fmtTime(end)}`;
+    }
+    const isUrl = /^https?:\/\//i.test(e.location || '');
+    const attendees = e.attendees || [];
+    const more = (e.attendeeCount || attendees.length) - attendees.length;
+
+    $('details-calendar').innerHTML = `<span class="cal-dot" data-cal="${Number(e.calIndex) % 4}"></span>${esc(e.calendar)}`;
+    $('details-title').textContent = e.title;
+    $('details-body').innerHTML = `
+      <p class="details-when">${esc(when)}</p>
+      ${e.joinUrl ? `<p><a class="btn btn-primary" href="${esc(safeUrl(e.joinUrl))}" target="_blank" rel="noopener">${icon('video')}Join meeting</a></p>` : ''}
+      ${e.location ? `<p class="details-row">${icon('pin')}<span>${isUrl ? linkify(e.location)
+        : `${esc(e.location)} · <a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(e.location)}" target="_blank" rel="noopener">Map</a>`}</span></p>` : ''}
+      ${e.description ? `<div class="details-desc">${linkify(e.description)}</div>` : ''}
+      ${attendees.length ? `
+        <h3 class="section-label">Guests (${e.attendeeCount || attendees.length})</h3>
+        <ul class="guests">${attendees.map(a => `<li><span>${esc(a.name)}${a.organizer ? ' <span class="muted small">Organizer</span>' : ''}</span><span class="guest-status ${esc(a.status)}">${GUEST_STATUS[a.status] || ''}</span></li>`).join('')}</ul>
+        ${more > 0 ? `<p class="muted small">and ${more} more</p>` : ''}` : ''}
+      ${e.link ? `<p><a class="btn btn-small btn-quiet" href="${esc(safeUrl(e.link))}" target="_blank" rel="noopener">Open in Google Calendar ${icon('external')}</a></p>` : ''}`;
+    $('details-dialog').showModal();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Tasks (Google Tasks through the Apps Script)                      */
+  /* ---------------------------------------------------------------- */
+
+  function taskLists() {
+    const payload = todayPayload();
+    return payload && Array.isArray(payload.tasks) ? payload.tasks : null;
+  }
+
+  function activeTaskList() {
+    const lists = taskLists() || [];
+    return lists.find(l => l.id === settings.taskList) || lists[0] || null;
+  }
+
+  function dueLabel(due) {
+    if (!due) return '';
+    const today = localDate();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (due < today) return '<span class="due overdue">Overdue</span>';
+    if (due === today) return '<span class="due today">Today</span>';
+    if (due === localDate(tomorrow)) return '<span class="due">Tomorrow</span>';
+    return `<span class="due">${new Date(`${due}T12:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`;
+  }
+
+  function renderTasks() {
+    const lists = taskLists();
+    $('tasks').hidden = !lists;
+    $('nav-tasks').hidden = !lists;
+    if (!lists) return;
+    const active = activeTaskList();
+    const open = l => l.items.filter(t => !t.done).length;
+    $('task-tabs').innerHTML = lists.length > 1
+      ? lists.map(l => `<button type="button" role="tab" class="tab" data-list="${esc(l.id)}" aria-selected="${l === active}">${esc(l.title)}${open(l) ? ` <span class="tab-count">${open(l)}</span>` : ''}</button>`).join('')
+      : '';
+    $('task-add').hidden = !active;
+    $('task-list').innerHTML = !active ? '<li class="muted">No task lists yet.</li>'
+      : !active.items.length ? '<li class="muted task-empty">All done.</li>'
+      : active.items.map(t => `
+        <li class="task${t.parent ? ' sub' : ''}${t.done ? ' done' : ''}">
+          <label>
+            <input type="checkbox" data-task="${esc(t.id)}"${t.done ? ' checked' : ''}>
+            <span class="task-title">${esc(t.title)}</span>
+          </label>
+          ${dueLabel(t.due)}
+        </li>`).join('');
+  }
+
+  function initTasks() {
+    $('task-tabs').addEventListener('click', e => {
+      const tab = e.target.closest('[data-list]');
+      if (!tab) return;
+      settings.taskList = tab.dataset.list;
+      saveSettings();
+      renderTasks();
+    });
+
+    $('task-list').addEventListener('change', async e => {
+      const box = e.target.closest('input[data-task]');
+      const list = activeTaskList();
+      const task = list && list.items.find(t => t.id === box.dataset.task);
+      if (!task) return;
+      const done = box.checked;
+      task.done = done;
+      renderTasks();
+      try {
+        await post({ action: 'setTaskDone', listId: list.id, taskId: task.id, done });
+        if (done) {
+          // Leave it checked briefly (so a mis-tap can be undone), then remove it.
+          setTimeout(() => {
+            if (!task.done) return;
+            list.items = list.items.filter(t => t !== task);
+            list.items.forEach(t => { if (t.parent === task.id) t.parent = ''; });
+            saveData();
+            renderTasks();
+          }, 2500);
+        }
+        saveData();
+      } catch (err) {
+        task.done = !done;
+        renderTasks();
+        setStatus(`Couldn't update the task: ${err.message}`, true);
+      }
+    });
+
+    $('task-add').addEventListener('submit', async e => {
+      e.preventDefault();
+      const input = e.target.title;
+      const title = input.value.trim();
+      const list = activeTaskList();
+      if (!title || !list) return;
+      input.disabled = true;
+      try {
+        const res = await post({ action: 'addTask', listId: list.id, title });
+        list.items.unshift(res.task);
+        input.value = '';
+        saveData();
+        renderTasks();
+      } catch (err) {
+        setStatus(`Couldn't add the task: ${err.message}`, true);
+      } finally {
+        input.disabled = false;
+        input.focus();
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Inbox (Gmail unread, read-only)                                   */
+  /* ---------------------------------------------------------------- */
+
+  function renderInbox(payload) {
+    const inbox = payload && payload.inbox;
+    $('inbox').hidden = !inbox;
+    if (!inbox) return;
+    const base = `https://mail.google.com/mail/?authuser=${encodeURIComponent(inbox.email)}`;
+    $('inbox-open').href = `${base}#inbox`;
+    $('inbox-count').hidden = !inbox.unread;
+    $('inbox-count').textContent = `${inbox.unread} unread`;
+    const more = inbox.unread - inbox.threads.length;
+    $('inbox-list').innerHTML = !inbox.threads.length
+      ? '<li class="muted">Nothing unread.</li>'
+      : inbox.threads.map(t => `
+        <li>
+          <a class="thread" href="${base}#inbox/${encodeURIComponent(t.id)}" target="_blank" rel="noopener">
+            <span class="thread-top">
+              <strong class="thread-from">${esc(t.from)}${t.count > 1 ? ` <span class="muted">${t.count}</span>` : ''}</strong>
+              <span class="muted small">${relativeTime(t.date)}</span>
+            </span>
+            <span class="thread-subject">${esc(t.subject)}</span>
+            ${t.snippet ? `<span class="muted small thread-snippet">${esc(t.snippet)}</span>` : ''}
+          </a>
+        </li>`).join('') + (more > 0 ? `<li class="thread-more"><a href="${base}#inbox" target="_blank" rel="noopener">${more} more unread</a></li>` : '');
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Weather alerts (National Weather Service; U.S. only)              */
+  /* ---------------------------------------------------------------- */
+
+  const SEVERITY = { Extreme: 0, Severe: 1, Moderate: 2, Minor: 3, Unknown: 4 };
+
+  async function loadAlerts() {
+    const p = settings.place;
+    if (!p) return;
+    try {
+      const res = await fetch(`https://api.weather.gov/alerts/active?point=${p.lat.toFixed(4)},${p.lon.toFixed(4)}`, { headers: { Accept: 'application/geo+json' } });
+      if (!res.ok) throw new Error(res.status);
+      const seen = new Set();
+      alerts = ((await res.json()).features || [])
+        .map(f => f.properties)
+        .filter(a => a && a.messageType !== 'Cancel' && !seen.has(a.event + (a.ends || a.expires)) && seen.add(a.event + (a.ends || a.expires)))
+        .sort((a, b) => (SEVERITY[a.severity] ?? 4) - (SEVERITY[b.severity] ?? 4));
+    } catch (e) {
+      alerts = []; // outside the U.S. or the service is down: show nothing
+    }
+    renderAlerts();
+  }
+
+  function alertUntil(a) {
+    const t = a.ends || a.expires;
+    if (!t) return '';
+    const d = new Date(t);
+    return `until ${localDate(d) === localDate() ? '' : `${d.toLocaleDateString('en-US', { weekday: 'short' })} `}${fmtTime(d)}`;
+  }
+
+  function renderAlerts() {
+    const box = $('alerts');
+    box.hidden = !alerts.length;
+    box.innerHTML = alerts.map((a, i) => {
+      const level = a.severity === 'Extreme' || a.severity === 'Severe' ? 'severe' : a.severity === 'Moderate' ? 'moderate' : 'minor';
+      return `<button type="button" class="alert-item ${level}" data-alert="${i}">${icon('alert')}<span><strong>${esc(a.event)}</strong> <span class="alert-until">${esc(alertUntil(a))}</span></span></button>`;
+    }).join('');
+  }
+
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-alert]');
+    if (!btn) return;
+    const a = alerts[Number(btn.dataset.alert)];
+    if (!a) return;
+    $('alert-title').textContent = a.event;
+    $('alert-meta').textContent = [a.severity, alertUntil(a)].filter(Boolean).join(' · ');
+    $('alert-body').innerHTML = `
+      ${a.headline ? `<p class="alert-headline">${esc(a.headline)}</p>` : ''}
+      ${a.description ? `<div class="alert-text">${esc(a.description)}</div>` : ''}
+      ${a.instruction ? `<h3 class="section-label">What to do</h3><div class="alert-text">${esc(a.instruction)}</div>` : ''}
+      <p class="muted small">${esc(a.senderName || 'National Weather Service')}</p>`;
+    $('alert-dialog').showModal();
+  });
 
   /* ---------------------------------------------------------------- */
   /* News                                                              */
