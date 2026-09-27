@@ -50,28 +50,73 @@ To check the setup, run `testDashboard` from the editor. It logs today's events,
 2. Set **Execute as: Me** and **Who has access: Anyone**. Anyone with the URL can reach the web app, but it returns data only with your API key.
 3. Click **Deploy** and copy the **Web app URL** (it ends in `/exec`).
 
-### 4. Connect the page
+### 4. Turn on background refresh
+
+Choose `installTriggers` in the function menu and click **Run**. Approve the new permission ("run when you're not present"). A timer then refreshes your calendars, the devotional, and the news every 10 minutes from 5 AM to 11 PM, so the page loads right away instead of waiting on Google.
+
+### 5. Connect the page
 
 Open the dashboard, click **Settings**, paste the web app URL and API key, and click **Save**. Do this once on each device (laptop, phone).
 
-### Updating the backend later
+## Updating the backend
 
-After you change `Code.gs`, go to **Deploy → Manage deployments**, click the pencil, set **Version** to **New version**, and click **Deploy**. The URL stays the same. Choosing *New deployment* instead would create a new URL.
+### By hand
+
+After changing `Code.gs`, paste it into the Apps Script editor and save. Then go to **Deploy → Manage deployments**, click the pencil, set **Version** to **New version**, and click **Deploy**. The URL stays the same. Choosing *New deployment* instead would create a new URL.
+
+### Automatic backend deploys
+
+`.github/workflows/apps-script.yml` can do the above for you whenever a change to `apps-script/` lands on `main`. It runs the backend tests, pushes the code with Google's [clasp](https://github.com/google/clasp) tool, and updates your existing deployment. It needs a one-time setup:
+
+1. Turn on the Apps Script API for your account at [script.google.com/home/usersettings](https://script.google.com/home/usersettings).
+2. On a computer with [Node.js](https://nodejs.org) installed, run this in a terminal and sign in as the account that owns the script:
+   ```
+   npx @google/clasp@2.4.2 login
+   ```
+   This creates a file named `.clasprc.json` in your home folder.
+3. In GitHub, open the repo's **Settings → Secrets and variables → Actions** and add three repository secrets:
+
+   | Secret | Where to find it |
+   | --- | --- |
+   | `CLASPRC_JSON` | The full contents of `~/.clasprc.json` from step 2 |
+   | `APPS_SCRIPT_ID` | Apps Script → **Project Settings** → **IDs → Script ID** |
+   | `APPS_SCRIPT_DEPLOYMENT_ID` | Apps Script → **Deploy → Manage deployments** → your web app's **Deployment ID** |
+
+Until the secrets are set, the workflow runs the tests and skips the deploy with a warning.
+
+If a change adds a new permission to `appsscript.json`, the deploy still succeeds, but you need to run any function once in the editor and approve the permission before the web app can use it.
+
+## Syncing between devices
+
+Your name, weather location, bookmarks, and notes are stored in your Apps Script as well as in each browser, so they match on your laptop and phone. If two devices change the same thing, the most recent change wins. The first time a device connects, its notes are combined with the synced notes rather than replacing them.
+
+Appearance (light or dark), the web app URL, and the API key stay separate on each device.
 
 ## Changing things
 
 - **News categories:** edit `DEFAULT_NEWS` at the top of `Code.gs`, or set a `NEWS` script property with the same shape.
 - **Bookmarks:** edit them in Settings, one per line as `Name | https://address`.
 - **Weather location:** set it in Settings.
+- **Days shown in the schedule:** change `SCHEDULE_DAYS` at the top of `app.js` (1 to 7).
+
+## Tests
+
+```
+npm install
+npm test
+```
+
+`tests/backend.test.js` checks the Apps Script code in Node: calendar feeds, news feeds, the devotional parser, and sync storage. `tests/e2e.test.js` loads the page in a headless browser with a fake backend and checks the schedule, devotional, weather, news, adding events, settings, and syncing. Both run on every pull request (`.github/workflows/test.yml`) and before each site deploy.
 
 ## Hosting
 
-Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
+Every push to `main` runs the tests and then deploys the page to GitHub Pages through `.github/workflows/deploy.yml`. Only the page's own files are published.
 
 **Install on your phone:** open the site, then use **Share → Add to Home Screen** on iPhone, or **⋮ → Install app** on Android.
 
 ## Privacy
 
 - Calendar data goes from Google to your Apps Script to your browser. No third-party proxies are involved.
+- Synced notes and bookmarks are stored in your Apps Script project's Script Properties, in your Google account.
 - The API key and web app URL are stored in each browser's localStorage. Settings → Export includes them, so keep backup files private.
 - Headlines link directly to their publishers. Weather requests send only your location's coordinates to Open-Meteo.

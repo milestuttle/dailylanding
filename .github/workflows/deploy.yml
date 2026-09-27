@@ -15,7 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   deploy:
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -27,10 +31,16 @@ jobs:
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
+      # Publish only the page itself, not the backend code, tests, or docs.
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp index.html app.js styles.css sw.js manifest.json icon-192.png icon-512.png apple-touch-icon.png _site/
+
       - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
