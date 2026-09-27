@@ -9,6 +9,7 @@ const { chromium } = require('playwright');
 
 const ROOT = path.join(__dirname, '..');
 const API = 'https://script.google.com/macros/s/TEST/exec';
+const WORK_API = 'https://script.google.com/macros/s/WORK/exec';
 const TZ = 'America/Denver';
 const NOW = new Date('2026-09-28T10:15:00-06:00');
 const TODAY = '2026-09-28';
@@ -168,6 +169,20 @@ async function run() {
     });
     await ctx.route(/script\.google\.com/, r => {
       const req = r.request();
+      // The work-account copy: tasks only, with its own key.
+      if (req.url().includes('/WORK/')) {
+        const body = req.method() === 'POST' ? JSON.parse(req.postData()) : null;
+        const key = body ? body.key : new URL(req.url()).searchParams.get('key');
+        if (key !== 'worksecret') return r.fulfill({ json: { ok: false, error: 'unauthorized' } });
+        if (body) {
+          backend.workPosts.push(body);
+          return r.fulfill({ json: body.action === 'addTask'
+            ? { ok: true, task: { id: 'wnew', title: body.title, notes: '', due: '', parent: '', position: '0' } }
+            : { ok: true } });
+        }
+        backend.workGets.push(new URL(req.url()));
+        return r.fulfill({ json: { ok: true, date: TODAY, tasks: backend.workTasks, errors: [] } });
+      }
       if (req.method() === 'POST') {
         const body = JSON.parse(req.postData());
         backend.posts.push(body);
@@ -367,6 +382,44 @@ async function run() {
     assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     await waitFor(async () => backend.sync.bookmarks && backend.sync.bookmarks.value.length === 2, 'bookmarks synced');
     assert.deepStrictEqual(errors, []);
+    await ctx.close();
+  }
+
+  // A work account adds its task lists; task changes go to the account that owns the list.
+  {
+    const backend = {
+      sync: {}, gets: [], posts: [], tasks: newTasks(), workGets: [], workPosts: [],
+      workTasks: [{ id: 'W1', title: 'My Tasks', items: [{ id: 'w1', title: 'Grade reports', notes: '', due: '', parent: '', position: '1' }] }]
+    };
+    const { page, ctx, errors } = await open({ backend, seed: settings({ workApiUrl: WORK_API, workApiKey: 'worksecret' }) });
+    assert.strictEqual(backend.workGets[0].searchParams.get('parts'), 'tasks', 'only tasks are asked of the work account');
+    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['Personal · My Tasks 3', 'Personal · Church 1', 'Work 1']);
+    await page.click('#task-tabs [data-list="W1"]');
+    assert.strictEqual(await page.locator('.task-title').first().textContent(), 'Grade reports');
+    await page.locator('input[data-task="w1"]').check();
+    await waitFor(async () => backend.workPosts.some(p => p.action === 'setTaskDone'), 'work setTaskDone POST');
+    assert.deepStrictEqual(backend.workPosts[0], { key: 'worksecret', action: 'setTaskDone', listId: 'W1', taskId: 'w1', done: true });
+    assert(!backend.posts.some(p => p.action === 'setTaskDone'), 'nothing sent to the personal account');
+    await page.fill('#task-add input', 'Enter grades');
+    await page.press('#task-add input', 'Enter');
+    await waitFor(async () => backend.workPosts.some(p => p.action === 'addTask'), 'work addTask POST');
+    assert.strictEqual(backend.workPosts.find(p => p.action === 'addTask').listId, 'W1');
+
+    // Settings shows both connections.
+    await page.click('.nav-settings');
+    assert.strictEqual(await page.inputValue('#settings-form input[name=workApiUrl]'), WORK_API);
+    await page.click('#settings-dialog [data-close]');
+    assert.deepStrictEqual(errors, []);
+    await ctx.close();
+  }
+
+  // A broken work connection is reported but doesn't hide anything else.
+  {
+    const backend = { sync: {}, gets: [], posts: [], tasks: newTasks(), workGets: [], workPosts: [], workTasks: [] };
+    const { page, ctx } = await open({ backend, seed: settings({ workApiUrl: WORK_API, workApiKey: 'wrong' }) });
+    assert.match(await page.textContent('#status'), /Work account: the API key does not match/);
+    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['My Tasks 3', 'Church 1']);
+    assert.match(await page.textContent('.devo-title'), /Renunciation/);
     await ctx.close();
   }
 

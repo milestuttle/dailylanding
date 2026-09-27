@@ -118,13 +118,29 @@ function setup() {
     props.setProperty('API_KEY', Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''));
   }
   Logger.log('API key (paste into dashboard Settings): ' + props.getProperty('API_KEY'));
-  Logger.log('Calendars this account can read (use the id in CALENDARS):');
-  CalendarApp.getAllCalendars().forEach(cal => {
-    Logger.log('  ' + cal.getName() + '  →  ' + cal.getId() + (cal.isOwnedByMe() ? '  (owner)' : ''));
-  });
-  if (!props.getProperty('CALENDARS')) {
-    Logger.log('CALENDARS is not set yet; the dashboard will use your primary calendar only.');
+  try {
+    const calendars = CalendarApp.getAllCalendars();
+    Logger.log('Calendars this account can read (use the id in CALENDARS):');
+    calendars.forEach(cal => {
+      Logger.log('  ' + cal.getName() + '  →  ' + cal.getId() + (cal.isOwnedByMe() ? '  (owner)' : ''));
+    });
+    if (!props.getProperty('CALENDARS')) {
+      Logger.log('CALENDARS is not set yet; the dashboard will use your primary calendar only.');
+    }
+  } catch (err) {
+    // A tasks-only copy (apps-script/work/appsscript.json) has no calendar permission.
+    Logger.log('Calendar access is not enabled for this copy; that is expected for a tasks-only work account.');
   }
+}
+
+/** Logs this account's task lists. Use it to check a tasks-only work-account copy. */
+function testTasks() {
+  const lists = taskLists_();
+  if (!lists) {
+    Logger.log('The Tasks service is not enabled. Check that appsscript.json was pasted in.');
+    return;
+  }
+  lists.forEach(l => Logger.log(l.title + ': ' + l.items.length + ' open task(s)' + (l.items.length ? ' — first: ' + l.items[0].title : '')));
 }
 
 /** Logs what the dashboard would receive today. Useful after changing settings. */
@@ -180,10 +196,13 @@ function dashboard_(params) {
   const days = Math.min(Math.max(parseInt(params.days || '1', 10) || 1, 1), 7);
   const refresh = params.refresh === '1';
   const cache = CacheService.getScriptCache();
-  if (!params.warm) rememberView_(tz, days);
+  // Which sections to build; a second (work-account) copy of this script is asked for tasks only.
+  const parts = String(params.parts || 'calendar,devotional,news,tasks,inbox,sync').split(',');
+  const want = part => parts.indexOf(part) !== -1;
+  if (!params.warm && want('calendar')) rememberView_(tz, days);
   const errors = [];
-  const calendars = getCalendarConfig_();
-  const news = getNewsConfig_();
+  const calendars = want('calendar') ? getCalendarConfig_() : [];
+  const news = want('news') ? getNewsConfig_() : [];
 
   const keys = {
     devotional: 'devo2:' + date,
@@ -198,7 +217,7 @@ function dashboard_(params) {
   // Collect every URL we still need, then fetch them in one parallel batch.
   const urls = [];
   calendars.forEach((cfg, i) => { if (cfg.ical && !cached[keys.cal[i]]) urls.push(cfg.ical); });
-  if (!cached[keys.devotional]) urls.push(DEVOTIONAL_URL);
+  if (want('devotional') && !cached[keys.devotional]) urls.push(DEVOTIONAL_URL);
   if (!cached[keys.news]) news.forEach(cat => cat.feeds.forEach(u => urls.push(u)));
   const fetched = fetchAllText_(urls);
   const toCache = {};
@@ -224,7 +243,7 @@ function dashboard_(params) {
   events.sort((a, b) => (b.allDay - a.allDay) || a.start.localeCompare(b.start) || a.title.localeCompare(b.title));
 
   // Devotional
-  let devotional = fromCache(keys.devotional);
+  let devotional = want('devotional') ? fromCache(keys.devotional) : null;
   if (devotional === undefined) {
     devotional = parseDevotional_(fetched[DEVOTIONAL_URL]);
     if (devotional) toCache[keys.devotional] = JSON.stringify(devotional);
@@ -232,7 +251,7 @@ function dashboard_(params) {
   }
 
   // News
-  let newsOut = fromCache(keys.news);
+  let newsOut = want('news') ? fromCache(keys.news) : [];
   if (!newsOut) {
     newsOut = news.map(cat => {
       const items = [];
@@ -246,7 +265,7 @@ function dashboard_(params) {
   // Tasks and Gmail (skipped by the background timer; they're quick and change often)
   let tasks = null;
   let inbox = null;
-  if (!params.warm) {
+  if (!params.warm && want('tasks')) {
     tasks = fromCache(keys.tasks);
     if (tasks === undefined) {
       try {
@@ -257,6 +276,8 @@ function dashboard_(params) {
         tasks = null;
       }
     }
+  }
+  if (!params.warm && want('inbox')) {
     inbox = fromCache(keys.inbox);
     if (inbox === undefined) {
       try {
@@ -288,7 +309,7 @@ function dashboard_(params) {
     news: newsOut,
     tasks: tasks,
     inbox: inbox,
-    sync: params.warm ? undefined : readSync_(),
+    sync: params.warm || !want('sync') ? undefined : readSync_(),
     errors: errors
   };
 }

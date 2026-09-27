@@ -264,6 +264,13 @@
           <label class="field">API key<input name="apiKey" type="password" autocomplete="off"></label>
         </fieldset>
 
+        <fieldset class="group">
+          <legend>Work account <span class="hint">(optional)</span></legend>
+          <p class="hint">A copy of the Apps Script in another Google account, such as your school account, adds that account's Google Tasks. <a href="https://github.com/milestuttle/dailylanding/tree/main/apps-script-work#readme" target="_blank" rel="noopener">Setup steps</a></p>
+          <label class="field">Web app URL<input name="workApiUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+          <label class="field">API key<input name="workApiKey" type="password" autocomplete="off"></label>
+        </fieldset>
+
         <label class="field" id="bookmarks-field">Bookmarks <span class="hint">One per line: Name | https://address</span>
           <textarea name="bookmarks" rows="8" spellcheck="false"></textarea>
         </label>

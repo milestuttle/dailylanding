@@ -99,6 +99,10 @@ If a change adds a new permission to `appsscript.json`, the deploy still succeed
 
 **After updating the backend with new permissions**, run `testDashboard` once in the editor and approve them. The web app can't use a permission you haven't approved.
 
+## Tasks from a second account (work or school)
+
+Google Tasks can't be shared between accounts, so tasks from another account, such as a school account, come from a second copy of the Apps Script running in that account. It uses the same `Code.gs` with [`apps-script-work/appsscript.json`](apps-script-work/appsscript.json), which asks only for Tasks permission. Setup steps are in [`apps-script-work/README.md`](apps-script-work/README.md). Once it's connected in **Settings → Work account**, the Tasks card shows both accounts' lists, labeled Personal and Work. Checking off or adding a task goes to the account that owns the list.
+
 ## Syncing between devices
 
 Your name, weather location, bookmarks, and notes are stored in your Apps Script as well as in each browser, so they match on your laptop and phone. If two devices change the same thing, the most recent change wins. The first time a device connects, its notes are combined with the synced notes rather than replacing them.
