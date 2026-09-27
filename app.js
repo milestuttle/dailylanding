@@ -12,26 +12,9 @@
     userName: 'Miles',
     theme: 'dark',
     weatherCity: 'Canon City, CO',
-    icalUrls: [
-      { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/private-498916cece0b466a98842b63b8c7a306/basic.ics', category: 'work' },
-      { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/private-5a8619156108f4e7ca0911a1ae832cbf/basic.ics', category: 'personal' }
-    ],
+    icalUrls: [],
     customRssUrl: '',
-    googleClientId: '',
-    mainGoal: '',
-    gratitude: ['', '', ''],
     scratchpad: '',
-    tasks: [
-      { id: '1', title: 'Morning devotional & prayer', category: 'priority', completed: true },
-      { id: '2', title: 'Review today\'s schedule and priorities', category: 'work', completed: false },
-      { id: '3', title: 'Exercise / 30-min walk', category: 'work', completed: false }
-    ],
-    habits: [
-      { id: 'h1', name: 'Morning Devotional', icon: '📖', streak: 7, completedToday: true },
-      { id: 'h2', name: 'Drink 8 Glasses Water', icon: '💧', streak: 4, completedToday: false },
-      { id: 'h3', name: '30 Min Exercise', icon: '🏃', streak: 5, completedToday: false },
-      { id: 'h4', name: 'Read 20 Mins', icon: '📚', streak: 12, completedToday: false }
-    ],
     events: [],
     shortcuts: [
       { name: 'New York Times', title: 'New York Times', url: 'https://www.nytimes.com', icon: '📰' },
@@ -86,12 +69,9 @@
     initWeather();
     initDevotional();
     initAgenda();
-    initHabits();
-    initPomodoro();
     initShortcuts();
     initNewsFeed();
     initScratchpad();
-    initGratitude();
     initSettingsModal();
     initCommandPalette();
     initWidgetCollapse();
@@ -108,12 +88,10 @@
       if (saved) {
         const parsed = JSON.parse(saved);
         const merged = { ...DEFAULT_STATE, ...parsed };
-        merged.icalUrls = DEFAULT_STATE.icalUrls;
-        if (merged.tasks && Array.isArray(merged.tasks)) {
-          merged.tasks.forEach(t => {
-            if (t.category === 'personal') t.category = 'work';
-          });
-        }
+        // Drop data from removed features and the old hard-coded calendar feeds
+        delete merged.tasks; delete merged.habits; delete merged.googleClientId;
+        delete merged.mainGoal; delete merged.gratitude; delete merged.icalUrl;
+        if (!Array.isArray(merged.icalUrls)) merged.icalUrls = [];
         return merged;
       }
     } catch (e) {
@@ -427,7 +405,7 @@
 
   async function fetchUtmostDevotional() {
     try {
-      const html = await fetchProxyContent('https://utmost.org/modern-classic/today/');
+      const html = await fetchProxyContent('https://utmost.org/modern-classic/today/', text => /<html/i.test(text));
       if (html) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
@@ -505,7 +483,7 @@
 
         const pBox = document.getElementById('modal-devo-paragraphs');
         if (pBox) {
-          pBox.innerHTML = activeDevotional.paragraphs.map(p => `<p>${p}</p>`).join('');
+          pBox.innerHTML = activeDevotional.paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
         }
         modal.classList.add('active');
       });
@@ -592,7 +570,7 @@
     }
     renderAgenda();
 
-    if ((state.icalUrls && state.icalUrls.length > 0) || state.icalUrl) {
+    if (state.icalUrls && state.icalUrls.length > 0) {
       fetchIcalFeed();
     }
   }
@@ -617,19 +595,18 @@
         </div>
       `;
       const btn = document.getElementById('modal-add-event-btn');
-      if (btn) btn.addEventListener('click', () => { modal.classList.remove('active'); openAddEventModal(); });
+      if (btn) btn.addEventListener('click', () => { modal.classList.remove('active'); document.getElementById('event-modal').classList.add('active'); });
       return;
     }
 
     const eventsHtml = state.events.map(e => {
       const isWork = e.category === 'work';
-      const email = isWork ? 'miles.tuttle@canoncityschools.org' : 'mbtutt@gmail.com';
       const label = isWork ? '💼 WORK' : '🏠 PERSONAL';
       return `
         <div class="agenda-item" style="padding: 0.75rem 0.9rem; background: rgba(0,0,0,0.08); border: 1px solid var(--card-border); border-radius: var(--radius-md); margin-bottom: 0.5rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-family: var(--font-mono); font-weight: 700; color: var(--primary); font-size: 0.85rem;">${formatTime12(e.time)}</span>
-            <span class="tag ${isWork ? 'tag-accent' : ''}" style="font-size: 0.65rem;">${label} • ${email}</span>
+            <span class="tag ${isWork ? 'tag-accent' : ''}" style="font-size: 0.65rem;">${label}</span>
           </div>
           <div style="font-weight: 600; margin-top: 0.3rem; color: var(--text-primary);">${escapeHtml(e.title)}</div>
           ${e.location ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📍 ${escapeHtml(e.location)}</div>` : ''}
@@ -659,14 +636,13 @@
 
     listEl.innerHTML = state.events.map(ev => {
       const isWork = ev.category === 'work';
-      const email = isWork ? 'miles.tuttle@canoncityschools.org' : 'mbtutt@gmail.com';
       const catLabel = isWork ? '💼 WORK' : '🏠 PERSONAL';
       return `
         <div class="event-item">
           <span class="event-time-badge">${formatTime12(ev.time)}</span>
           <div class="event-details">
             <div class="event-title">${escapeHtml(ev.title)}</div>
-            <div class="event-cat" style="${isWork ? 'color: var(--primary); font-weight: 700;' : ''}">${catLabel} • ${email}</div>
+            <div class="event-cat" style="${isWork ? 'color: var(--primary); font-weight: 700;' : ''}">${catLabel}</div>
           </div>
           <button class="event-delete-btn" data-id="${ev.id}" title="Delete event">&times;</button>
         </div>
@@ -682,7 +658,7 @@
     });
   }
 
-  async function fetchProxyContent(url) {
+  async function fetchProxyContent(url, isValid = text => text.includes('BEGIN:VCALENDAR')) {
     const timeParam = `&_t=${Date.now()}`;
     const proxies = [
       u => `https://proxy.cors.sh/${u}`,
@@ -695,7 +671,7 @@
         const res = await fetch(proxyFn(url));
         if (res.ok) {
           const text = await res.text();
-          if (text && text.includes('BEGIN:VCALENDAR')) return text;
+          if (text && isValid(text)) return text;
         }
       } catch (e) {
         console.warn('Proxy attempt failed:', e);
@@ -706,7 +682,7 @@
       const direct = await fetch(url);
       if (direct.ok) {
         const text = await direct.text();
-        if (text && text.includes('BEGIN:VCALENDAR')) return text;
+        if (text && isValid(text)) return text;
       }
     } catch (e) {}
 
@@ -740,7 +716,7 @@
     const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?(Z)?/);
     if (!dtstartMatch) return false;
 
-    const isUtc = block.includes('Z') || dtstartMatch[3] === 'Z';
+    const isUtc = dtstartMatch[3] === 'Z';
     const startDateObj = parseIcalDate(dtstartMatch[1], dtstartMatch[2], isUtc);
     if (!startDateObj) return false;
 
@@ -760,7 +736,7 @@
       // Check UNTIL date if present
       const untilMatch = rrule.match(/UNTIL=(\d{8})(?:T(\d{6}))?(Z)?/);
       if (untilMatch) {
-        const untilDateObj = parseIcalDate(untilMatch[1], untilMatch[2], block.includes('Z'));
+        const untilDateObj = parseIcalDate(untilMatch[1], untilMatch[2], untilMatch[3] === 'Z');
         if (untilDateObj && untilDateObj < todayStart) return false;
       }
 
@@ -796,14 +772,13 @@
 
   async function fetchIcalFeed() {
     const statusEl = document.getElementById('ical-sync-status');
-    const feeds = state.icalUrls && state.icalUrls.length > 0
-      ? state.icalUrls
-      : [
-          { name: 'Work', url: 'https://calendar.google.com/calendar/ical/miles.tuttle%40canoncityschools.org/public/basic.ics', category: 'work' },
-          { name: 'Personal', url: 'https://calendar.google.com/calendar/ical/mbtutt%40gmail.com/public/basic.ics', category: 'personal' }
-        ];
+    const feeds = state.icalUrls || [];
+    if (feeds.length === 0) {
+      if (statusEl) statusEl.textContent = 'No calendar feeds set (add them in Settings)';
+      return;
+    }
 
-    if (statusEl) statusEl.textContent = '🔄 Syncing Work & Personal Calendars...';
+    if (statusEl) statusEl.textContent = 'Syncing calendars...';
 
     const now = new Date();
     const todayYMD = now.getFullYear().toString() + 
@@ -823,7 +798,7 @@
 
           blocks.slice(1).forEach(block => {
             const summaryMatch = block.match(/SUMMARY:(.*)/);
-            const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?/);
+            const dtstartMatch = block.match(/DTSTART(?:;[^:]*)?:(\d{8})(?:T(\d{6}))?(Z)?/);
 
             if (summaryMatch && dtstartMatch) {
               const title = summaryMatch[1].trim();
@@ -831,8 +806,7 @@
               if (isEventOnDate(block, now)) {
                 let time = '08:00';
                 if (dtstartMatch[2]) {
-                  const isUtc = block.includes('Z');
-                  const eventDate = parseIcalDate(dtstartMatch[1], dtstartMatch[2], isUtc);
+                  const eventDate = parseIcalDate(dtstartMatch[1], dtstartMatch[2], dtstartMatch[3] === 'Z');
                   if (eventDate) {
                     time = `${String(eventDate.getHours()).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')}`;
                   }
@@ -861,12 +835,12 @@
       updateKpiStats();
 
       if (allEvents.length > 0) {
-        if (statusEl) statusEl.textContent = `✅ Synced ${allEvents.length} Work & Personal events`;
+        if (statusEl) statusEl.textContent = `Synced ${allEvents.length} calendar event${allEvents.length === 1 ? '' : 's'}`;
       } else {
-        if (statusEl) statusEl.textContent = '✅ Synced Work & Personal Calendars (No events today)';
+        if (statusEl) statusEl.textContent = 'Synced (no calendar events today)';
       }
     } catch (e) {
-      if (statusEl) statusEl.textContent = '⚠️ iCal Sync error';
+      if (statusEl) statusEl.textContent = 'Calendar sync failed';
     }
   }
 
@@ -876,332 +850,6 @@
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
     return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
-  }
-
-  // --- TASKS MANAGER ---
-  function initTasks() {
-    renderTasks();
-
-    const form = document.getElementById('add-task-form');
-    if (form) {
-      form.addEventListener('submit', e => {
-        e.preventDefault();
-        const titleInput = document.getElementById('new-task-title');
-        const catSelect = document.getElementById('new-task-category');
-        if (titleInput.value.trim()) {
-          state.tasks.unshift({
-            id: Date.now().toString(),
-            title: titleInput.value.trim(),
-            category: catSelect.value,
-            completed: false
-          });
-          titleInput.value = '';
-          saveState();
-          renderTasks();
-        }
-      });
-    }
-
-    // Filter tabs
-    const tabs = document.querySelectorAll('.task-filter-tabs .tab-btn');
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        renderTasks(tab.dataset.filter);
-      });
-    });
-
-    // Google Tasks Sync Button
-    const syncTasksBtn = document.getElementById('sync-google-tasks-btn');
-    if (syncTasksBtn) {
-      syncTasksBtn.addEventListener('click', syncGoogleTasks);
-    }
-  }
-
-  async function syncGoogleTasks() {
-    const btn = document.getElementById('sync-google-tasks-btn');
-    if (!state.googleClientId) {
-      const clientId = prompt('Enter your Google OAuth Client ID to sync live Google Tasks:\n(Or leave blank to use quick demo sync)');
-      if (clientId) {
-        state.googleClientId = clientId.trim();
-        saveState();
-      } else {
-        alert('ℹ️ Quick Sync: Add a Client ID in Settings for direct OAuth live sync with Google Tasks API.');
-        return;
-      }
-    }
-
-    if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
-      alert('Google Identity library loading... Please try again in 5 seconds.');
-      return;
-    }
-
-    if (btn) btn.textContent = '🔄 Authenticating...';
-
-    try {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: (state.googleClientId || '').trim(),
-        scope: 'https://www.googleapis.com/auth/tasks',
-        error_callback: (err) => {
-          console.warn('OAuth Error:', err);
-          alert('Google Auth Error: ' + JSON.stringify(err));
-          if (btn) btn.textContent = 'Sync Google Tasks';
-        },
-        callback: async (response) => {
-          if (response.error) {
-            alert('Google Auth error: ' + response.error);
-            if (btn) btn.textContent = 'Sync Google Tasks';
-            return;
-          }
-          if (btn) btn.textContent = '🔄 Fetching Tasks...';
-          
-          const accessToken = response.access_token;
-          // Fetch Task Lists
-          const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
-            headers: { Authorization: `Bearer ${accessToken}` }
-          });
-          const listsData = await listsRes.json();
-
-          if (listsData.items && listsData.items.length > 0) {
-            let fetchedTasks = [];
-            for (const list of listsData.items) {
-              const taskRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${list.id}/tasks`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-              });
-              const taskData = await taskRes.json();
-              if (taskData.items) {
-                const isWork = list.title.toLowerCase().includes('work') || list.title.toLowerCase().includes('canon');
-                taskData.items.forEach(gtask => {
-                  if (gtask.title) {
-                    fetchedTasks.push({
-                      id: 'gtask-' + gtask.id,
-                      title: gtask.title,
-                      category: 'work',
-                      completed: gtask.status === 'completed'
-                    });
-                  }
-                });
-              }
-            }
-
-            if (fetchedTasks.length > 0) {
-              // Merge with local tasks
-              const existingIds = new Set(state.tasks.map(t => t.id));
-              fetchedTasks.forEach(ft => {
-                if (!existingIds.has(ft.id)) state.tasks.unshift(ft);
-              });
-              saveState();
-              renderTasks();
-              alert(`✅ Successfully synced ${fetchedTasks.length} Google Tasks!`);
-            }
-          }
-          if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Sync Google Tasks';
-        }
-      });
-      client.requestAccessToken();
-    } catch (e) {
-      alert('Error initiating Google Tasks sync: ' + e.message);
-      if (btn) btn.textContent = 'Sync Google Tasks';
-    }
-  }
-
-  function renderTasks(filter = 'all') {
-    const container = document.getElementById('task-list-container');
-    const subtitle = document.getElementById('tasks-count-subtitle');
-    if (!container) return;
-
-    const completedCount = state.tasks.filter(t => t.completed).length;
-    if (subtitle) subtitle.textContent = `${completedCount} of ${state.tasks.length} completed`;
-
-    let filtered = state.tasks;
-    if (filter !== 'all') {
-      filtered = state.tasks.filter(t => t.category === filter);
-    }
-
-    if (filtered.length === 0) {
-      container.innerHTML = `<div class="loading-spinner-box">No tasks found. Add one above!</div>`;
-      return;
-    }
-
-    container.innerHTML = filtered.map(t => {
-      let tagHtml = '';
-      if (t.category === 'priority') tagHtml = `<span class="task-tag priority">🔥 Priority</span>`;
-      else if (t.category === 'quick') tagHtml = `<span class="task-tag quick">⚡ Quick</span>`;
-
-      return `
-        <div class="task-item ${t.completed ? 'completed' : ''}">
-          <label class="task-checkbox-label">
-            <input type="checkbox" class="task-checkbox" data-id="${t.id}" ${t.completed ? 'checked' : ''}>
-            <span class="task-title-text">${escapeHtml(t.title)}</span>
-          </label>
-          ${tagHtml}
-          <button class="event-delete-btn delete-task-btn" data-id="${t.id}" title="Delete task">&times;</button>
-        </div>
-      `;
-    }).join('');
-
-    container.querySelectorAll('.task-checkbox').forEach(chk => {
-      chk.addEventListener('change', () => {
-        const task = state.tasks.find(t => t.id === chk.dataset.id);
-        if (task) {
-          task.completed = chk.checked;
-          saveState();
-          renderTasks(filter);
-        }
-      });
-    });
-
-    container.querySelectorAll('.delete-task-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.tasks = state.tasks.filter(t => t.id !== btn.dataset.id);
-        saveState();
-        renderTasks(filter);
-      });
-    });
-  }
-
-  // --- HABIT TRACKER ---
-  function initHabits() {
-    renderHabits();
-
-    const addBtn = document.getElementById('add-habit-btn');
-    if (addBtn) {
-      addBtn.addEventListener('click', () => {
-        const name = prompt('Enter new habit name (e.g., Morning Prayer, Read Bible):');
-        if (name) {
-          state.habits.push({ id: Date.now().toString(), name, icon: '⭐', streak: 0, completedToday: false });
-          saveState();
-          renderHabits();
-        }
-      });
-    }
-  }
-
-  function renderHabits() {
-    const container = document.getElementById('habits-container');
-    if (!container) return;
-
-    container.innerHTML = state.habits.map(h => `
-      <div class="habit-item">
-        <div class="habit-info">
-          <span class="habit-icon">${h.icon}</span>
-          <div>
-            <div class="habit-name">${escapeHtml(h.name)}</div>
-            <div class="habit-streak">🔥 ${h.streak} day streak</div>
-          </div>
-        </div>
-        <button class="habit-check-btn ${h.completedToday ? 'checked' : ''}" data-id="${h.id}">
-          ${h.completedToday ? '✓' : ''}
-        </button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.habit-check-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const habit = state.habits.find(h => h.id === btn.dataset.id);
-        if (habit) {
-          habit.completedToday = !habit.completedToday;
-          habit.streak += habit.completedToday ? 1 : -1;
-          if (habit.streak < 0) habit.streak = 0;
-          saveState();
-          renderHabits();
-        }
-      });
-    });
-  }
-
-  // --- POMODORO TIMER ---
-  let pomoInterval = null;
-  let pomoSecondsLeft = 25 * 60;
-  let pomoIsRunning = false;
-
-  function initPomodoro() {
-    const display = document.getElementById('pomo-display');
-    const startBtn = document.getElementById('pomo-start-btn');
-    const resetBtn = document.getElementById('pomo-reset-btn');
-    const tabs = document.querySelectorAll('.pomo-tabs .pomo-tab');
-
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        const mins = parseInt(tab.dataset.time, 10);
-        resetPomo(mins);
-      });
-    });
-
-    if (startBtn) {
-      startBtn.addEventListener('click', () => {
-        if (pomoIsRunning) {
-          pausePomo();
-        } else {
-          startPomo();
-        }
-      });
-    }
-
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => resetPomo(25));
-    }
-  }
-
-  function startPomo() {
-    pomoIsRunning = true;
-    const startBtn = document.getElementById('pomo-start-btn');
-    if (startBtn) startBtn.textContent = 'Pause Focus';
-
-    pomoInterval = setInterval(() => {
-      pomoSecondsLeft--;
-      updatePomoDisplay();
-
-      if (pomoSecondsLeft <= 0) {
-        clearInterval(pomoInterval);
-        pomoIsRunning = false;
-        if (startBtn) startBtn.textContent = 'Start Focus';
-        playChime();
-        alert('🎉 Focus session completed! Take a break.');
-      }
-    }, 1000);
-  }
-
-  function pausePomo() {
-    pomoIsRunning = false;
-    clearInterval(pomoInterval);
-    const startBtn = document.getElementById('pomo-start-btn');
-    if (startBtn) startBtn.textContent = 'Resume Focus';
-  }
-
-  function resetPomo(mins = 25) {
-    pausePomo();
-    pomoSecondsLeft = mins * 60;
-    updatePomoDisplay();
-    const startBtn = document.getElementById('pomo-start-btn');
-    if (startBtn) startBtn.textContent = 'Start Focus';
-  }
-
-  function updatePomoDisplay() {
-    const display = document.getElementById('pomo-display');
-    if (!display) return;
-    const m = Math.floor(pomoSecondsLeft / 60);
-    const s = pomoSecondsLeft % 60;
-    display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-
-  function playChime() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 1.5);
-    } catch (e) {}
   }
 
   // --- SHORTCUTS LAUNCHER ---
@@ -1433,30 +1081,6 @@
     }
   }
 
-  // --- GRATITUDE & MAIN GOAL ---
-  function initGratitude() {
-    const goalInput = document.getElementById('daily-main-goal');
-    if (goalInput) {
-      goalInput.value = state.mainGoal || '';
-      goalInput.addEventListener('input', () => {
-        state.mainGoal = goalInput.value;
-        saveState();
-      });
-    }
-
-    [1, 2, 3].forEach(num => {
-      const gInput = document.getElementById(`daily-gratitude-${num}`);
-      if (gInput) {
-        gInput.value = (state.gratitude && state.gratitude[num - 1]) || '';
-        gInput.addEventListener('input', () => {
-          if (!state.gratitude) state.gratitude = ['', '', ''];
-          state.gratitude[num - 1] = gInput.value;
-          saveState();
-        });
-      }
-    });
-  }
-
   // --- SETTINGS MODAL ---
   function initSettingsModal() {
     const openBtn = document.getElementById('settings-open-btn');
@@ -1467,7 +1091,7 @@
     if (openBtn && modal) {
       openBtn.addEventListener('click', () => {
         document.getElementById('setting-user-name').value = state.userName || '';
-        document.getElementById('setting-ical-url').value = state.icalUrl || '';
+        document.getElementById('setting-ical-url').value = (state.icalUrls || []).map(f => f.url).join('\n');
         document.getElementById('setting-weather-city').value = state.weatherCity || '';
         document.getElementById('setting-custom-rss').value = state.customRssUrl || '';
         modal.classList.add('active');
@@ -1481,7 +1105,12 @@
     if (saveBtn && modal) {
       saveBtn.addEventListener('click', () => {
         state.userName = document.getElementById('setting-user-name').value.trim() || 'Miles';
-        state.icalUrl = document.getElementById('setting-ical-url').value.trim();
+        const icalUrls = document.getElementById('setting-ical-url').value.split(/[\s,]+/).filter(Boolean);
+        state.icalUrls = icalUrls.map((url, i) => ({
+          name: i === 0 ? 'Work' : i === 1 ? 'Personal' : `Calendar ${i + 1}`,
+          url,
+          category: i === 0 ? 'work' : 'personal'
+        }));
         state.weatherCity = document.getElementById('setting-weather-city').value.trim();
         state.customRssUrl = document.getElementById('setting-custom-rss').value.trim();
         saveState();
@@ -1526,7 +1155,7 @@
     const resetBtn = document.getElementById('reset-data-btn');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to reset all tasks, notes, and settings?')) {
+        if (confirm('Reset all notes, bookmarks, and settings on this device?')) {
           localStorage.removeItem(STORAGE_KEY);
           location.reload();
         }

@@ -19,9 +19,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   
-  <!-- Google Identity Services for Google Tasks OAuth Sync -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -210,7 +207,7 @@
           </div>
 
           <div class="card-footer agenda-footer">
-            <span class="ical-status" id="ical-sync-status">ℹ️ Local Calendar (Add iCal feed in settings)</span>
+            <span class="ical-status" id="ical-sync-status">No calendar feeds set (add them in Settings)</span>
             <button class="btn-text-sm" id="refresh-ical-btn">Sync Calendar</button>
           </div>
         </article>
@@ -305,11 +302,8 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         </button>
         <button class="btn-text-sm" id="density-toggle-btn" title="Toggle Density (Normal / Compact)">📐 Compact</button>
-        <span class="status-pulse-badge">
-          <span class="pulse-dot"></span> LIVE SYNC ACTIVE
-        </span>
       </div>
-      <p>Daily Personal Landing Page • Designed for Laptop & Mobile • <span id="sync-status-footer">Local Storage Active</span></p>
+      <p>Daily Personal Landing Page • Designed for Laptop & Mobile • <span id="sync-status-footer">Saved on this device</span></p>
     </footer>
 
   </div>
@@ -399,13 +393,14 @@
             <input type="time" id="event-time-input" class="custom-input" value="09:00" required>
           </div>
           <div class="input-field-group">
-            <label class="input-label">Target Calendar</label>
+            <label class="input-label">Label</label>
             <select id="event-category-input" class="custom-select">
-              <option value="work">💼 Work (miles.tuttle@canoncityschools.org)</option>
-              <option value="personal">🏠 Personal (mbtutt@gmail.com)</option>
+              <option value="work">💼 Work</option>
+              <option value="personal">🏠 Personal</option>
             </select>
           </div>
         </div>
+        <span class="field-help">Saved on this device only. This does not add the event to Google Calendar.</span>
         <div class="modal-actions">
           <button type="button" class="btn btn-outline" id="cancel-event-btn">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Event</button>
@@ -428,9 +423,9 @@
         </div>
         
         <div class="input-field-group">
-          <label class="input-label">Google Calendar / iCal Feed URL (.ics)</label>
-          <input type="url" id="setting-ical-url" class="custom-input" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
-          <span class="field-help">Paste your Google Calendar secret iCal address to sync live events automatically.</span>
+          <label class="input-label">Calendar Feed URLs (.ics), one per line</label>
+          <textarea id="setting-ical-url" class="custom-textarea" rows="3" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"></textarea>
+          <span class="field-help">First line is labeled Work, second Personal. Stored only in this browser, never in the repo.</span>
         </div>
 
         <div class="input-field-group">
@@ -444,17 +439,11 @@
           <input type="url" id="setting-custom-rss" class="custom-input" placeholder="https://feeds.feedburner.com/...">
         </div>
 
-        <div class="input-field-group">
-          <label class="input-label">Google OAuth Client ID (Optional for Live Google Tasks Sync)</label>
-          <input type="text" id="setting-google-client-id" class="custom-input" placeholder="e.g. 123456789-abc.apps.googleusercontent.com">
-          <span class="field-help">Allows 1-click live syncing with Work & Personal Google Tasks via Google Identity API.</span>
-        </div>
-
         <hr class="divider">
 
         <div class="settings-backup-section">
           <h3>Data Backup & Restore</h3>
-          <p>Export your dashboard tasks, notes, habits, and preferences as a JSON file, or restore from a backup.</p>
+          <p>Export your notes, bookmarks, and settings as a JSON file, or restore from a backup.</p>
           <div class="backup-actions">
             <button class="btn btn-outline btn-sm" id="export-data-btn">📥 Export Backup JSON</button>
             <label class="btn btn-outline btn-sm" for="import-data-file">
