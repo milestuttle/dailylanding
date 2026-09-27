@@ -109,7 +109,7 @@ function setup() {
 function testDashboard() {
   const tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-  const data = dashboard_({ date: today, tz: tz, refresh: '1' });
+  const data = dashboard_({ date: today, tz: tz, days: '3', refresh: '1' });
   Logger.log('Events: ' + JSON.stringify(data.events, null, 2));
   Logger.log('Devotional: ' + JSON.stringify(data.devotional, null, 2));
   Logger.log('News: ' + data.news.map(c => c.label + ' (' + c.items.length + ')').join(', '));
@@ -134,6 +134,7 @@ function debugDevotional() {
 function dashboard_(params) {
   const tz = params.tz || Session.getScriptTimeZone();
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date || '') ? params.date : Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  const days = Math.min(Math.max(parseInt(params.days || '1', 10) || 1, 1), 7);
   const refresh = params.refresh === '1';
   const cache = CacheService.getScriptCache();
   const errors = [];
@@ -143,7 +144,7 @@ function dashboard_(params) {
   const keys = {
     devotional: 'devo2:' + date,
     news: 'news:' + hash_(JSON.stringify(news)),
-    cal: calendarCacheKeys_(calendars, date, tz)
+    cal: calendarCacheKeys_(calendars, date, tz, days)
   };
   const cached = refresh ? {} : cache.getAll([keys.devotional, keys.news].concat(keys.cal));
   const fromCache = k => (cached[k] ? JSON.parse(cached[k]) : undefined);
@@ -157,7 +158,7 @@ function dashboard_(params) {
   const toCache = {};
 
   // Calendar
-  const range = { start: zonedToUtc_(date, '00:00', tz), end: zonedToUtc_(addDays_(date, 1), '00:00', tz) };
+  const range = { start: zonedToUtc_(date, '00:00', tz), end: zonedToUtc_(addDays_(date, days), '00:00', tz) };
   let events = [];
   calendars.forEach((cfg, i) => {
     let list = fromCache(keys.cal[i]);
@@ -204,6 +205,7 @@ function dashboard_(params) {
   return {
     generated: new Date().toISOString(),
     date: date,
+    days: days,
     calendars: calendars.map((cfg, i) => ({ index: i, name: cfg.name, writable: !cfg.ical })),
     events: events,
     devotional: devotional,
@@ -212,8 +214,8 @@ function dashboard_(params) {
   };
 }
 
-function calendarCacheKeys_(calendars, date, tz) {
-  return calendars.map(cfg => 'cal:' + hash_(JSON.stringify(cfg) + date + tz));
+function calendarCacheKeys_(calendars, date, tz, days) {
+  return calendars.map(cfg => 'cal:' + hash_(JSON.stringify(cfg) + date + tz + days));
 }
 
 function hash_(s) {
@@ -290,7 +292,8 @@ function addEvent_(p) {
   }
 
   const cache = CacheService.getScriptCache();
-  cache.removeAll(calendarCacheKeys_(calendars, p.date, tz));
+  // The page reloads with refresh=1 after adding; this clears what other devices see.
+  cache.removeAll(calendarCacheKeys_(calendars, p.viewDate || p.date, tz, p.days || 1));
   return { id: ev.getId() };
 }
 

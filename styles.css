@@ -420,6 +420,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-weight: 500;
 }
 
+.agenda-day + .agenda-day { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.agenda-day-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.agenda-day-label .muted { font-weight: 500; font-size: 0.8125rem; }
+
 .events { margin: 0; padding: 0; list-style: none; }
 
 .event {
