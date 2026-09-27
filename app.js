@@ -35,8 +35,14 @@
     bookmarks: DEFAULT_BOOKMARKS,
     notes: '',
     newsTab: '',
-    place: null // cached geocoding result: { query, name, lat, lon }
+    place: null, // cached geocoding result: { query, name, lat, lon }
+    // Sync bookkeeping: when each synced field was last edited, which ones
+    // still need uploading, and whether this device has merged with the server yet.
+    syncAt: {},
+    syncDirty: [],
+    syncedOnce: false
   };
+  const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes'];
 
   const $ = id => document.getElementById(id);
   let settings = loadSettings();
@@ -98,7 +104,10 @@
         try { localStorage.removeItem(LEGACY_KEY); } catch (e) { /* ignore */ }
       }
     }
-    return Object.assign({}, DEFAULTS, saved || {});
+    const merged = Object.assign({}, DEFAULTS, saved || {});
+    merged.syncAt = Object.assign({}, merged.syncAt);
+    merged.syncDirty = Array.isArray(merged.syncDirty) ? merged.syncDirty.slice() : [];
+    return merged;
   }
 
   function saveSettings() {
@@ -306,6 +315,7 @@
       data = { fetchedAt: Date.now(), payload };
       writeJson(DATA_KEY, data);
       renderData();
+      if (payload.sync) applySync(payload.sync);
     } catch (e) {
       setStatus(`Couldn't update: ${e.message}`, true);
     } finally {
@@ -623,10 +633,20 @@
       clearTimeout(timer);
       timer = setTimeout(() => {
         settings.notes = text.value;
-        saveSettings();
+        markChanged(['notes']);
         status.textContent = 'Saved';
         setTimeout(() => { status.textContent = ''; }, 1500);
       }, 400);
+    });
+    // Save and upload anything pending before the page is hidden or closed.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) return;
+      if (text.value !== settings.notes) {
+        clearTimeout(timer);
+        settings.notes = text.value;
+        markChanged(['notes']);
+      }
+      flushSync();
     });
     $('copy-notes').addEventListener('click', async () => {
       try {
@@ -637,6 +657,134 @@
       }
       setTimeout(() => { status.textContent = ''; }, 1500);
     });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Sync (name, city, bookmarks, notes) through the Apps Script       */
+  /* ---------------------------------------------------------------- */
+
+  let syncTimer = null;
+
+  const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  function setDirty(field, dirty) {
+    const has = settings.syncDirty.includes(field);
+    if (dirty && !has) settings.syncDirty.push(field);
+    if (!dirty && has) settings.syncDirty = settings.syncDirty.filter(f => f !== field);
+  }
+
+  /** Records local edits and uploads them shortly after. */
+  function markChanged(fields) {
+    const now = Date.now();
+    fields.forEach(f => {
+      settings.syncAt[f] = now;
+      setDirty(f, true);
+    });
+    saveSettings();
+    if (fields.length) {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(pushSync, 1500);
+    }
+  }
+
+  function syncRequest(keepalive) {
+    const fields = {};
+    settings.syncDirty.forEach(f => { fields[f] = { value: settings[f], at: settings.syncAt[f] || Date.now() }; });
+    return fetch(settings.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: settings.apiKey, action: 'saveSync', fields }),
+      keepalive: !!keepalive
+    });
+  }
+
+  // Nothing is uploaded until this device has merged with the server once,
+  // so a new device can't overwrite notes saved from another one.
+  const canPush = () => connected() && settings.syncedOnce && settings.syncDirty.length > 0;
+
+  async function pushSync() {
+    clearTimeout(syncTimer);
+    if (!canPush()) return;
+    try {
+      const res = await callApi(syncRequest(false));
+      applySync(res.sync || {}, true);
+    } catch (e) {
+      // Still marked dirty; retried on the next edit or refresh.
+    }
+  }
+
+  /** Best-effort upload while the page is being hidden or closed. */
+  function flushSync() {
+    if (!canPush()) return;
+    clearTimeout(syncTimer);
+    try { syncRequest(true).catch(() => {}); } catch (e) { /* body too large for keepalive */ }
+  }
+
+  /** On a device's first sync, keep both sides' content rather than picking one. */
+  function mergeFirst(field, local, remote) {
+    if (field === 'notes') {
+      const l = (local || '').trim();
+      const r = (remote || '').trim();
+      if (!l || r.includes(l)) return remote;
+      if (!r || l.includes(r)) return local;
+      return `${remote.trimEnd()}\n\n${local.trim()}`;
+    }
+    if (field === 'bookmarks') {
+      if (sameValue(local, DEFAULT_BOOKMARKS)) return remote;
+      const urls = new Set(remote.map(b => b.url));
+      return remote.concat(local.filter(b => !urls.has(b.url)));
+    }
+    return remote || local;
+  }
+
+  /** Applies what the server has; for each field, the most recent edit wins. */
+  function applySync(remote, fromPush) {
+    const changed = [];
+    const shownNotes = settings.notes;
+    SYNC_FIELDS.forEach(f => {
+      const r = remote[f];
+      const localAt = settings.syncAt[f] || 0;
+      if (!r) {
+        // The server has never seen this field: upload ours.
+        if (!localAt) settings.syncAt[f] = Date.now();
+        setDirty(f, true);
+      } else if (!settings.syncedOnce) {
+        const merged = mergeFirst(f, settings[f], r.value);
+        if (!sameValue(merged, settings[f])) changed.push(f);
+        settings[f] = merged;
+        if (sameValue(merged, r.value)) {
+          settings.syncAt[f] = r.at;
+          setDirty(f, false);
+        } else {
+          settings.syncAt[f] = Date.now();
+          setDirty(f, true);
+        }
+      } else if (r.at > localAt) {
+        if (!sameValue(r.value, settings[f])) changed.push(f);
+        settings[f] = r.value;
+        settings.syncAt[f] = r.at;
+        setDirty(f, false);
+      } else {
+        setDirty(f, r.at < localAt);
+      }
+    });
+    settings.syncedOnce = true;
+    saveSettings();
+
+    if (changed.includes('name')) tick();
+    if (changed.includes('bookmarks')) renderLinks();
+    if (changed.includes('city')) loadWeather();
+    // Update the notes box unless it holds typing that hasn't been saved yet.
+    const box = $('notes-text');
+    if (changed.includes('notes') && box.value === shownNotes) {
+      const caret = Math.min(box.selectionStart, settings.notes.length);
+      box.value = settings.notes;
+      if (document.activeElement === box) box.setSelectionRange(caret, caret);
+    }
+    if (!fromPush && settings.syncDirty.length) {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(pushSync, 500);
+    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -680,6 +828,7 @@
     form.addEventListener('submit', e => {
       e.preventDefault();
       const before = { city: settings.city, apiUrl: settings.apiUrl, apiKey: settings.apiKey };
+      const beforeSynced = SYNC_FIELDS.map(f => JSON.stringify(settings[f]));
       Object.assign(settings, {
         name: form.name.value.trim(),
         city: form.city.value.trim(),
@@ -689,12 +838,15 @@
         bookmarks: parseBookmarks(form.bookmarks.value)
       });
       saveSettings();
+      markChanged(SYNC_FIELDS.filter((f, i) => JSON.stringify(settings[f]) !== beforeSynced[i]));
       dialog.close();
       applyTheme();
       tick();
       renderLinks();
       if (settings.city !== before.city) loadWeather();
       if (settings.apiUrl !== before.apiUrl || settings.apiKey !== before.apiKey) {
+        settings.syncedOnce = false; // merge with whatever the new connection has stored
+        saveSettings();
         data = null;
         localStorage.removeItem(DATA_KEY);
         loadData(true);
@@ -717,7 +869,11 @@
         const imported = JSON.parse(await file.text());
         if (!imported || typeof imported !== 'object' || Array.isArray(imported)) throw new Error();
         settings = Object.assign({}, DEFAULTS, imported);
-        saveSettings();
+        settings.syncAt = {};
+        settings.syncDirty = [];
+        settings.syncedOnce = true;
+        markChanged(SYNC_FIELDS); // the restored values should win on other devices too
+        await pushSync();
         location.reload();
       } catch (err) {
         alert('That file is not a DailyDash backup.');
@@ -725,7 +881,7 @@
     });
 
     $('reset-btn').addEventListener('click', () => {
-      if (!confirm('Reset settings, bookmarks, and notes on this device?')) return;
+      if (!confirm('Reset this device? Settings stored here are cleared. Synced notes and bookmarks stay in your Google account and come back once you reconnect.')) return;
       [SETTINGS_KEY, DATA_KEY, LEGACY_KEY].forEach(k => localStorage.removeItem(k));
       location.reload();
     });

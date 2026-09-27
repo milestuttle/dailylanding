@@ -22,6 +22,11 @@
  *                 {"name": "Personal", "id": "primary"}]
  *              "email" is optional; with it, iCal events you declined are hidden.
  *   NEWS       Optional JSON array to replace DEFAULT_NEWS below.
+ *
+ * Also stored here, managed by the script itself:
+ *   SYNC_*     Name, city, bookmarks, and notes shared between your devices.
+ *   LAST_VIEW  The time zone and day count the page last asked for, so the
+ *              background timer (installTriggers) can keep that data cached.
  */
 
 const DEFAULT_NEWS = [
@@ -45,7 +50,11 @@ const DEFAULT_NEWS = [
 
 const DEVOTIONAL_URL = 'https://utmost.org/modern-classic/today/';
 const NEWS_PER_CATEGORY = 8;
-const CACHE_SECONDS = { calendar: 600, devotional: 21600, news: 1200 };
+// The background timer refreshes every 10 minutes; these outlast it so the page always hits the cache.
+const CACHE_SECONDS = { calendar: 1200, devotional: 21600, news: 1800 };
+const WARM_EVERY_MINUTES = 10;
+const WARM_HOURS = { from: 5, to: 23 }; // skip overnight to save your daily Apps Script quota
+const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes'];
 
 /* ------------------------------------------------------------------ */
 /* Entry points                                                        */
@@ -63,8 +72,9 @@ function doPost(e) {
   let body = {};
   try { body = JSON.parse(e.postData.contents); } catch (err) { /* handled below */ }
   return respond_(body, params => {
-    if (params.action !== 'addEvent') throw new Error('Unknown action');
-    return addEvent_(params);
+    if (params.action === 'addEvent') return addEvent_(params);
+    if (params.action === 'saveSync') return saveSync_(params);
+    throw new Error('Unknown action');
   });
 }
 
@@ -116,6 +126,25 @@ function testDashboard() {
   Logger.log('Errors: ' + JSON.stringify(data.errors));
 }
 
+/** Turns on the background timer that keeps the dashboard's data cached. Run once. */
+function installTriggers() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'warmCache')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('warmCache').timeBased().everyMinutes(WARM_EVERY_MINUTES).create();
+  warmCache();
+  Logger.log('Background refresh is on: every ' + WARM_EVERY_MINUTES + ' minutes from ' + WARM_HOURS.from + ':00 to ' + WARM_HOURS.to + ':00.');
+}
+
+/** Run by the timer: fetches calendars, devotional, and news ahead of the page asking. */
+function warmCache() {
+  const view = JSON.parse(PropertiesService.getScriptProperties().getProperty('LAST_VIEW') || '{}');
+  const tz = view.tz || Session.getScriptTimeZone();
+  const hour = Number(Utilities.formatDate(new Date(), tz, 'H'));
+  if (hour < WARM_HOURS.from || hour >= WARM_HOURS.to) return;
+  dashboard_({ date: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'), tz: tz, days: String(view.days || 1), refresh: '1', warm: true });
+}
+
 /** Logs how utmost.org's page breaks down, for fixing the devotional parser. */
 function debugDevotional() {
   const html = UrlFetchApp.fetch(DEVOTIONAL_URL, { muteHttpExceptions: true }).getContentText()
@@ -137,6 +166,7 @@ function dashboard_(params) {
   const days = Math.min(Math.max(parseInt(params.days || '1', 10) || 1, 1), 7);
   const refresh = params.refresh === '1';
   const cache = CacheService.getScriptCache();
+  if (!params.warm) rememberView_(tz, days);
   const errors = [];
   const calendars = getCalendarConfig_();
   const news = getNewsConfig_();
@@ -210,8 +240,71 @@ function dashboard_(params) {
     events: events,
     devotional: devotional,
     news: newsOut,
+    sync: params.warm ? undefined : readSync_(),
     errors: errors
   };
+}
+
+function rememberView_(tz, days) {
+  const props = PropertiesService.getScriptProperties();
+  const view = JSON.stringify({ tz: tz, days: days });
+  if (props.getProperty('LAST_VIEW') !== view) props.setProperty('LAST_VIEW', view);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sync: settings and notes shared between devices                     */
+/* ------------------------------------------------------------------ */
+
+// Script Properties hold at most 9 KB per value, so the JSON is stored in chunks.
+const SYNC_CHUNK_CHARS = 2000;
+const SYNC_MAX_CHARS = 300000;
+
+/** Returns { field: { value, at } } for each synced field that has been saved. */
+function readSync_() {
+  const props = PropertiesService.getScriptProperties();
+  const count = parseInt(props.getProperty('SYNC_CHUNKS') || '0', 10);
+  let json = '';
+  for (let i = 0; i < count; i++) json += props.getProperty('SYNC_' + i) || '';
+  try { return json ? JSON.parse(json) : {}; } catch (err) { return {}; }
+}
+
+function writeSync_(data) {
+  const props = PropertiesService.getScriptProperties();
+  const json = JSON.stringify(data);
+  if (json.length > SYNC_MAX_CHARS) throw new Error('Notes are too long to sync (limit about 300,000 characters).');
+  const oldCount = parseInt(props.getProperty('SYNC_CHUNKS') || '0', 10);
+  const chunks = {};
+  let count = 0;
+  for (let i = 0; i < json.length; i += SYNC_CHUNK_CHARS) chunks['SYNC_' + count++] = json.slice(i, i + SYNC_CHUNK_CHARS);
+  chunks.SYNC_CHUNKS = String(count);
+  props.setProperties(chunks);
+  for (let i = count; i < oldCount; i++) props.deleteProperty('SYNC_' + i);
+}
+
+/** Saves each field that is newer than what's stored (by the device's edit time). */
+function saveSync_(p) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const stored = readSync_();
+    const incoming = p.fields || {};
+    SYNC_FIELDS.forEach(field => {
+      const f = incoming[field];
+      if (!f || typeof f.at !== 'number' || !validSyncValue_(field, f.value)) return;
+      if (!stored[field] || f.at > stored[field].at) stored[field] = { value: f.value, at: f.at };
+    });
+    writeSync_(stored);
+    return { sync: stored };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function validSyncValue_(field, value) {
+  if (field === 'bookmarks') {
+    return Array.isArray(value) && value.every(b => b && typeof b.name === 'string' && typeof b.url === 'string');
+  }
+  return typeof value === 'string';
 }
 
 function calendarCacheKeys_(calendars, date, tz, days) {

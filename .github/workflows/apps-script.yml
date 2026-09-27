@@ -1,0 +1,52 @@
+# Pushes apps-script/ to your Apps Script project and updates the existing web app
+# deployment (same URL) whenever backend code changes on main.
+# Needs three repository secrets; see "Automatic backend deploys" in README.md.
+name: Deploy Apps Script backend
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["apps-script/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-script
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+      DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run backend tests
+        run: node tests/backend.test.js
+
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ] || [ -z "$DEPLOYMENT_ID" ]; then
+            echo "::warning::Apps Script secrets aren't set, so the backend was not deployed. See 'Automatic backend deploys' in README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push code and update the web app deployment
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"apps-script"}' "$SCRIPT_ID" > .clasp.json
+          npx --yes @google/clasp@2.4.2 push --force
+          npx --yes @google/clasp@2.4.2 deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"
