@@ -613,6 +613,28 @@ async function run() {
     await page.click('#refresh-btn');
     await waitFor(async () => (await page.inputValue('#notes-text')) === 'Edited on the laptop later', 'remote edit applied');
 
+    // Pull to refresh: a short pull does nothing; a long one refreshes without reloading the page.
+    const pullDown = dy => page.evaluate(dy => {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      const touch = y => new Touch({ identifier: 1, target: document.body, clientX: 150, clientY: y });
+      const fire = (type, y) => document.body.dispatchEvent(new TouchEvent(type, {
+        bubbles: true, cancelable: true, touches: type === 'touchend' ? [] : [touch(y)], changedTouches: [touch(y)]
+      }));
+      fire('touchstart', 100);
+      for (let y = 110; y <= 100 + dy; y += 10) fire('touchmove', y);
+      fire('touchend', 100 + dy);
+    }, dy);
+    await page.evaluate(() => { window.notReloaded = true; });
+    const before = backend.gets.length;
+    await pullDown(80);
+    await page.waitForTimeout(300);
+    assert.strictEqual(backend.gets.length, before, 'a short pull does not refresh');
+    await pullDown(200);
+    await waitFor(async () => backend.gets.length > before, 'pull to refresh');
+    assert.strictEqual(backend.gets[before].searchParams.get('refresh'), '1', 'skips the backend cache');
+    await waitFor(async () => !(await page.locator('#ptr').evaluate(el => el.classList.contains('refreshing'))), 'spinner stops');
+    assert(await page.evaluate(() => window.notReloaded), 'the page itself is not reloaded');
+
     assert(await page.isHidden('#tasks'), 'Tasks card hidden when the backend has no Tasks service');
     assert(await page.isHidden('#nav-tasks'));
     assert(await page.isHidden('#inbox'));

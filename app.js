@@ -85,6 +85,7 @@
     initLinks();
     initDetails();
     initNav();
+    initPullToRefresh();
     tick();
     setInterval(tick, 20 * 1000);
     renderLinks();
@@ -1858,7 +1859,7 @@
       renderWeatherDialog();
       $('weather-dialog').showModal();
     });
-    $('refresh-btn').addEventListener('click', () => { loadData(true); loadWeather(); });
+    $('refresh-btn').addEventListener('click', refreshAll);
   }
 
   function initSettings() {
@@ -1945,6 +1946,71 @@
       [SETTINGS_KEY, DATA_KEY, LEGACY_KEY].forEach(k => localStorage.removeItem(k));
       location.reload();
     });
+  }
+
+  /** Fetches everything again, skipping the backend's cache. */
+  const refreshAll = () => Promise.all([loadData(true), loadWeather()]);
+
+  /* ---------------------------------------------------------------- */
+  /* Pull to refresh (touch screens)                                   */
+  /* ---------------------------------------------------------------- */
+
+  const PULL_TRIGGER = 70; // how far (after damping) the page must be pulled to refresh
+  const PULL_MAX = 110;
+
+  function initPullToRefresh() {
+    if (!window.matchMedia('(pointer: coarse)').matches) return;
+    const ptr = $('ptr');
+    let startX = 0;
+    let startY = null; // set while a pull might be under way
+    let pull = 0;
+    let busy = false;
+
+    const show = d => {
+      pull = d;
+      ptr.style.setProperty('--pull', `${d}px`);
+      ptr.style.setProperty('--turn', `${d * 3}deg`);
+      ptr.classList.toggle('ready', d >= PULL_TRIGGER);
+    };
+
+    document.addEventListener('touchstart', e => {
+      if (busy || window.scrollY > 0 || e.touches.length !== 1 || document.querySelector('dialog[open]')) return;
+      if (e.target.closest('textarea, input, select, .search-suggest')) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+      if (startY == null) return;
+      const dy = e.touches[0].clientY - startY;
+      const dx = e.touches[0].clientX - startX;
+      // Scrolling up or swiping sideways isn't a pull.
+      if (!pull && (dy <= 0 || Math.abs(dx) > dy || window.scrollY > 0)) {
+        startY = null;
+        return;
+      }
+      ptr.classList.add('pulling');
+      show(Math.min(Math.max(dy, 0) * 0.5, PULL_MAX));
+    }, { passive: true });
+
+    const release = async () => {
+      if (startY == null) return;
+      startY = null;
+      ptr.classList.remove('pulling');
+      if (pull < PULL_TRIGGER) { show(0); return; }
+      busy = true;
+      ptr.classList.add('refreshing');
+      show(PULL_TRIGGER);
+      try {
+        await refreshAll();
+      } finally {
+        busy = false;
+        ptr.classList.remove('refreshing');
+        show(0);
+      }
+    };
+    document.addEventListener('touchend', release);
+    document.addEventListener('touchcancel', release);
   }
 
   /* ---------------------------------------------------------------- */
