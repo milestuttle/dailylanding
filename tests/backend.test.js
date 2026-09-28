@@ -32,9 +32,11 @@ const CacheService = { getScriptCache: () => ({
 Utilities.DigestAlgorithm = { MD5: 'md5' };
 Utilities.computeDigest = (alg, s) => [...require('crypto').createHash(alg).update(s).digest()];
 Utilities.base64EncodeWebSafe = bytes => Buffer.from(bytes).toString('base64url');
+Utilities.base64DecodeWebSafe = s => [...Buffer.from(s, 'base64url')];
+Utilities.newBlob = bytes => ({ getDataAsString: () => Buffer.from(bytes).toString('utf8') });
 const ctx = vm.createContext({ Utilities, PropertiesService, LockService, CacheService, console });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8')
-  + '\n;this.api={icalEventsInRange_,zonedToUtc_,addDays_,parseFeed_,parseDevotional_,saveSync_,readSync_,findJoinUrl_,descriptionToText_,apiEvent_,taskLists_,addTask_,setTaskDone_,inbox_,senderName_,dashboard_};', ctx);
+  + '\n;this.api={icalEventsInRange_,zonedToUtc_,addDays_,parseFeed_,parseDevotional_,saveSync_,readSync_,findJoinUrl_,descriptionToText_,apiEvent_,taskLists_,addTask_,setTaskDone_,inbox_,senderName_,message_,dashboard_};', ctx);
 const api = ctx.api;
 const TZ = 'America/Denver';
 const range = d => ({ start: api.zonedToUtc_(d, '00:00', TZ), end: api.zonedToUtc_(api.addDays_(d, 1), '00:00', TZ) });
@@ -228,6 +230,9 @@ console.log('live-shaped devotional ok');
   api.saveSync_({ fields: { bookmarks: { value: 'nope', at: 300 }, apiKey: { value: 'x', at: 300 } } });
   assert.strictEqual(api.readSync_().bookmarks, undefined);
   assert.strictEqual(api.readSync_().apiKey, undefined);
+  // The day the devotional was last read syncs too.
+  api.saveSync_({ fields: { devoRead: { value: '2026-09-28', at: 300 } } });
+  assert.strictEqual(api.readSync_().devoRead.value, '2026-09-28');
   // Long notes are split across properties, and shrinking removes leftover chunks.
   const long = 'Pray for the team. '.repeat(3000);
   api.saveSync_({ fields: { notes: { value: long, at: 400 }, bookmarks: { value: [{ name: 'ESV', url: 'https://www.esv.org' }], at: 400 } } });
@@ -355,7 +360,31 @@ console.log('live-shaped devotional ok');
   assert.deepStrictEqual(inbox, { email: 'me@gmail.com', unread: 12, threads: [{ id: 't1', from: 'Liza Tuttle', subject: 'Dinner', snippet: 'See you at 6 & bring chairs', date: new Date(1790000600000).toISOString(), count: 2 }] });
   assert.strictEqual(api.senderName_('bob@x.org'), 'bob@x.org');
   assert.strictEqual(api.senderName_('<bob@x.org>'), 'bob@x.org');
+
+  // Message preview: the newest message's text/plain part, or its HTML part as text.
+  const b64 = s => Buffer.from(s).toString('base64url');
+  const headers = [{ name: 'From', value: 'Liza <liza@gmail.com>' }, { name: 'To', value: 'me@gmail.com' }, { name: 'Subject', value: 'Dinner' }];
+  let threadOpts;
+  ctx.Gmail.Users.Threads.get = (user, id, opts) => {
+    threadOpts = opts;
+    return { messages: [
+      { internalDate: '1790000000000', payload: { headers } },
+      { internalDate: '1790000600000', payload: { mimeType: 'multipart/alternative', headers, parts: [
+        { mimeType: 'text/plain', body: { data: b64('See you at 6 — bring chairs.\r\n\r\n\r\n\r\nLiza') } },
+        { mimeType: 'text/html', body: { data: b64('<p>ignored</p>') } }
+      ] } }
+    ] };
+  };
+  const msg = JSON.parse(JSON.stringify(api.message_({ threadId: 't1' }).message));
+  assert.strictEqual(threadOpts.format, 'full');
+  assert.deepStrictEqual(msg, { from: 'Liza <liza@gmail.com>', to: 'me@gmail.com', subject: 'Dinner', date: new Date(1790000600000).toISOString(), count: 2, body: 'See you at 6 — bring chairs.\n\nLiza' });
+  ctx.Gmail.Users.Threads.get = () => ({ messages: [{ internalDate: '1', payload: { mimeType: 'text/html', headers, body: { data: b64(
+    '<html><style>p { color: red }</style><body>\n  <p>Hi   there,</p>\n<table><tr><td>Total</td><td>$5 &amp; tax</td></tr></table><a href="https://x.org/r">Receipt</a></body></html>'
+  ) } } }] });
+  assert.strictEqual(api.message_({ threadId: 't2' }).message.body, 'Hi there,\nTotal $5 & tax\n\nReceipt (https://x.org/r)');
+  assert.throws(() => api.message_({}), /conversation is required/);
   delete ctx.Gmail;
+  assert.throws(() => api.message_({ threadId: 't1' }), /Gmail service is not enabled/);
   console.log('gmail ok');
 }
 

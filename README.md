@@ -92,7 +92,7 @@ If a change adds a new permission to `appsscript.json`, the deploy still succeed
 | --- | --- | --- |
 | Schedule, Join buttons, event details | Google Calendar (Calendar API service), or a calendar's secret iCal address | Calendar |
 | Tasks | Google Tasks (Tasks service) | Tasks |
-| Inbox | Gmail (Gmail service), unread messages in your inbox | Gmail, read only |
+| Inbox | Gmail (Gmail service), unread messages in your inbox. Clicking one shows its text without marking it read; this needs the current `Code.gs`. | Gmail, read only |
 | Weather and alerts | The National Weather Service (current conditions from the nearest station, the local forecast office's hourly and 7-day forecast, and alerts), straight from your browser. Open-Meteo is used only if the NWS is unavailable. | none |
 
 `appsscript.json` turns on the Calendar API, Tasks, and Gmail services. If you paste it by hand, they switch on when you save. The Tasks and Inbox cards only appear once those services work, and the page falls back to basic calendar details if the Calendar API service is off.
@@ -105,14 +105,15 @@ Google Tasks can't be shared between accounts, so tasks from another account, su
 
 ## Syncing between devices
 
-Your name, weather location, bookmarks, and notes are stored in your Apps Script as well as in each browser, so they match on your laptop and phone. If two devices change the same thing, the most recent change wins. The first time a device connects, its notes are combined with the synced notes rather than replacing them.
+Your name, weather location, bookmarks, notes, and whether you've read today's devotional are stored in your Apps Script as well as in each browser, so they match on your laptop and phone. If two devices change the same thing, the most recent change wins. The first time a device connects, its notes are combined with the synced notes rather than replacing them.
 
-Appearance (light or dark), the web app URL, and the API key stay separate on each device.
+Appearance (light or dark), folded and hidden cards, the web app URL, and the API key stay separate on each device.
 
 ## Changing things
 
 - **News categories:** edit `DEFAULT_NEWS` at the top of `Code.gs`, or set a `NEWS` script property with the same shape.
-- **Bookmarks:** edit them in Settings, one per line as `Name | https://address`.
+- **Bookmarks:** click **Edit** on the Bookmarks card to rename, reorder, add, or remove them. Site icons come from Google's favicon service; a site without one gets a letter instead.
+- **Cards:** fold any card with the arrow in its corner, or hide cards in **Settings → Cards on this device**. Both are remembered per device.
 - **Weather location:** set it in Settings.
 - **Days shown in the schedule:** change `SCHEDULE_DAYS` at the top of `app.js` (1 to 7).
 
