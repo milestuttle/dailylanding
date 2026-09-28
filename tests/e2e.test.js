@@ -16,6 +16,7 @@ const TODAY = '2026-09-28';
 // Set SCREENSHOTS=some/dir to save screenshots for a visual check.
 const SHOTS = process.env.SCREENSHOTS;
 const shot = (page, name, opts = {}) => (SHOTS ? page.screenshot(Object.assign({ path: path.join(SHOTS, `${name}.png`) }, opts)) : null);
+const PLACEHOLDER_ICON = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNoaGj4TwlmGDVg1IBRA4aLAQCJj38fETZOLAAAAABJRU5ErkJggg==', 'base64');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
 
 function staticServer() {
@@ -145,12 +146,16 @@ async function run() {
   const browser = await chromium.launch();
 
   /** Opens the page with mocks. `backend` holds the fake server's sync store and records requests. */
-  async function open({ seed, backend = { sync: {}, gets: [], posts: [], tasks: newTasks() }, viewport = { width: 1360, height: 1000 }, colorScheme = 'light', mobile = false }) {
+  async function open({ seed, backend = { sync: {}, gets: [], posts: [], tasks: newTasks() }, viewport = { width: 1360, height: 1000 }, colorScheme = 'light', mobile = false, now = NOW }) {
     const ctx = await browser.newContext({ viewport, colorScheme, timezoneId: TZ, isMobile: mobile, hasTouch: mobile });
-    await ctx.clock.install({ time: NOW });
+    await ctx.clock.install({ time: now });
     await ctx.clock.resume();
     await ctx.route(/geocoding-api\.open-meteo\.com/, r => r.fulfill({ json: { results: [{ name: 'Cañon City', admin1: 'Colorado', country_code: 'US', latitude: 38.44, longitude: -105.24 }] } }));
     await ctx.route(/\/\/api\.open-meteo\.com/, r => r.fulfill({ json: forecast }));
+    // Site icons: esv.org has one; everything else gets Google's 16px placeholder.
+    await ctx.route(/google\.com\/s2\/favicons/, r => (r.request().url().includes('esv.org')
+      ? r.fulfill({ path: path.join(ROOT, 'icon-192.png') })
+      : r.fulfill({ status: 404, contentType: 'image/png', body: PLACEHOLDER_ICON })));
     await ctx.route(/api\.weather\.gov/, r => {
       const url = r.request().url();
       if (url.includes('/alerts/')) {
@@ -188,6 +193,9 @@ async function run() {
         backend.posts.push(body);
         if (body.key !== 'secret') return r.fulfill({ json: { ok: false, error: 'unauthorized' } });
         if (body.action === 'setTaskDone') return r.fulfill({ json: { ok: true } });
+        if (body.action === 'message') {
+          return r.fulfill({ json: { ok: true, message: { from: 'Liza Tuttle <liza@gmail.com>', to: 'me@gmail.com', subject: 'Dinner Friday?', date: '2026-09-28T15:45:00Z', count: 2, body: 'Bring chairs <b>and</b> a table.\nRSVP: https://x.org/rsvp.' } } });
+        }
         if (body.action === 'addTask') {
           return r.fulfill({ json: { ok: true, task: { id: 'new', title: body.title, notes: '', due: '', parent: '', position: '0' } } });
         }
@@ -261,6 +269,23 @@ async function run() {
     assert.match(await day(2).textContent(), /Nothing scheduled/);
     assert.strictEqual(await page.locator('script:not([src])').count(), 1, 'event titles are not inserted as HTML');
 
+    // Header: what's on now, a Join button for it, the day in one line, and the tab title.
+    assert.match(await page.textContent('#next-up'), /· until 11:30 AM$/);
+    assert(await page.isVisible('#next-join'));
+    assert.strictEqual(await page.getAttribute('#next-join', 'href'), 'https://meet.google.com/abc-defg-hij');
+    assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 2 tasks due (1 overdue) · 7 unread');
+    assert.strictEqual(await page.title(), '(7) Now: Current meeting <script>alert(1)</script>');
+
+    // Timeline for today: one block per timed event, a "now" line, and the longest open stretch.
+    assert.strictEqual(await day(0).locator('.tl-block').count(), 3);
+    assert.strictEqual(await day(0).locator('.tl-block.past').count(), 1);
+    assert.strictEqual(await day(0).locator('.tl-now').count(), 1);
+    assert.strictEqual(await day(0).locator('.tl-open').textContent(), 'Longest open stretch: 11:30 AM – 6 PM (6 hr 30 min)');
+    assert.strictEqual(await day(1).locator('.timeline').count(), 0, 'only the first day gets a timeline');
+    await day(0).locator('.tl-block').nth(1).click();
+    assert.match(await page.textContent('#details-title'), /^Current meeting/, 'a block opens its event');
+    await page.locator('#details-dialog [data-close]').click();
+
     await shot(page, 'desktop', { fullPage: true });
 
     // Join buttons: none on past events; the current one is highlighted.
@@ -289,7 +314,10 @@ async function run() {
     // Tasks
     assert(await page.isVisible('#tasks'));
     assert(await page.isVisible('#nav-tasks'));
-    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['My Tasks 3', 'Church 1']);
+    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['My Tasks 3 2 due', 'Church 1']);
+    assert.strictEqual(await page.locator('#task-tabs .tab-due.overdue').count(), 1, 'red when something is overdue');
+    assert.strictEqual(await page.locator('.task.overdue .task-title').textContent(), 'Order curriculum');
+    assert.strictEqual(await page.locator('.task.due-today .task-title').textContent(), 'Call Sam');
     assert.strictEqual(await page.locator('.task.sub').count(), 1);
     assert.strictEqual(await page.locator('.task .due.overdue').count(), 1);
     assert.strictEqual(await page.locator('.task .due.today').count(), 1);
@@ -298,6 +326,7 @@ async function run() {
     assert.deepStrictEqual(backend.posts.find(p => p.action === 'setTaskDone'), { key: 'secret', action: 'setTaskDone', listId: 'L1', taskId: 'b', done: true });
     assert.strictEqual(await page.locator('.task.done').count(), 1, 'stays briefly, crossed out');
     await waitFor(async () => (await page.locator('input[data-task="b"]').count()) === 0, 'completed task removed');
+    assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 1 task due (1 overdue) · 7 unread');
     await page.fill('#task-add input', 'Email the board');
     await page.press('#task-add input', 'Enter');
     await waitFor(async () => (await page.locator('.task-title').first().textContent()) === 'Email the board', 'new task shown first');
@@ -310,6 +339,20 @@ async function run() {
     assert.strictEqual(await page.locator('.thread').count(), 2);
     assert.strictEqual(await page.getAttribute('.thread >> nth=0', 'href'), 'https://mail.google.com/mail/?authuser=me%40gmail.com#inbox/t1');
     assert.match(await page.textContent('.thread-more'), /5 more unread/);
+
+    // Clicking a message previews it; the whole text comes from the backend.
+    await page.click('.thread >> nth=0');
+    const message = page.locator('#message-dialog');
+    assert(await message.isVisible());
+    assert.strictEqual(await page.textContent('#message-subject'), 'Dinner Friday?');
+    await waitFor(async () => (await message.locator('.message-text').textContent()).includes('table'), 'message text');
+    assert.deepStrictEqual(backend.posts.find(p => p.action === 'message'), { key: 'secret', action: 'message', threadId: 't1' });
+    assert.match(await message.locator('.message-text').textContent(), /Bring chairs <b>and<\/b> a table\./, 'message text is shown as text');
+    assert.strictEqual(await message.locator('.message-text a').getAttribute('href'), 'https://x.org/rsvp');
+    assert.match(await message.locator('.message-meta').textContent(), /To me@gmail\.com · Latest of 2 messages/);
+    assert.strictEqual(await page.getAttribute('#message-open', 'href'), 'https://mail.google.com/mail/?authuser=me%40gmail.com#inbox/t1');
+    await shot(page, 'message');
+    await message.locator('[data-close]').click();
 
     // Weather alerts: sorted by severity, duplicates and cancellations dropped.
     assert.match(backend.alertUrl, /alerts\/active\?point=38\.4400,-105\.2400/);
@@ -325,14 +368,25 @@ async function run() {
 
     // Devotional
     assert.strictEqual(await page.textContent('.devo-title'), 'The “Go” of Renunciation');
+    assert.strictEqual(await page.getAttribute('#devo-body cite a', 'href'), 'https://www.esv.org/Luke+9:57/');
     await page.click('#devo-read');
     assert.strictEqual(await page.locator('#devo-dialog-body > p').count(), 3);
     await page.keyboard.press('Escape');
+    // Closing the reading marks it read: the card shrinks to one line, and that syncs.
+    await waitFor(() => page.isVisible('.devo-done'), 'devotional marked read');
+    assert.match(await page.textContent('.devo-done'), /Read today\s*The “Go” of Renunciation/);
+    await waitFor(async () => backend.sync.devoRead && backend.sync.devoRead.value === TODAY, 'devotional read synced');
+    await page.click('#devo-show');
+    assert(await page.isVisible('.devo-title'));
+    await page.click('#devo-hide');
+    assert(await page.isVisible('.devo-done'));
 
     // Weather
     // Weather from the National Weather Service: current reading from the nearest station.
     assert.strictEqual(await page.textContent('#weather-temp'), '66°', '18.9 °C from the station');
-    assert.strictEqual(await page.textContent('#weather-desc'), 'Mostly Sunny · H 72° L 44°');
+    assert.strictEqual(await page.textContent('#weather-desc'), 'Mostly Sunny · H 72° L 44° · 20% rain');
+    const strip = (await page.locator('.wx-mini').allTextContents()).map(t => t.replace(/\s+/g, ' ').trim());
+    assert.deepStrictEqual(strip, ['11am 62°', '12pm 63°', '1pm 64°', '2pm 65° 20%', '3pm 66°', '4pm 67°'], 'next six hours in the weather button');
     assert(backend.nwsCalls.some(u => u.endsWith('/points/38.4400,-105.2400')));
     await page.click('#weather-chip');
     assert.strictEqual(await page.locator('.hour').count(), 12);
@@ -371,16 +425,89 @@ async function run() {
     assert.strictEqual(added.start, '11:00');
     assert.strictEqual(added.days, 3);
 
-    // Settings: bookmarks and theme.
+    // Bookmarks: site icons where there is one, else the glyph.
+    await page.locator('#links').scrollIntoViewIfNeeded();
+    await waitFor(async () => (await page.locator('.link-icon img').count()) === 1, 'placeholder icons dropped');
+    assert.match(await page.getAttribute('.link-icon img', 'src'), /domain=www\.esv\.org/);
+
+    // Search: part of a bookmark's name opens it; anything else searches Google; "/" jumps to the box.
+    await page.evaluate(() => { window.open = url => { window.opened = url; }; });
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('/');
+    assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'search-input');
+    await page.keyboard.type('gem');
+    assert.deepStrictEqual((await page.locator('.suggest').allTextContents()).map(t => t.replace(/\s+/g, ' ').trim()), ['Geminigemini.google.com', 'Search Google for gem']);
+    await page.keyboard.press('Enter');
+    assert.strictEqual(await page.evaluate(() => window.opened), 'https://gemini.google.com');
+    assert.strictEqual(await page.inputValue('#search-input'), '');
+    await page.fill('#search-input', 'royal gorge hours');
+    await page.press('#search-input', 'Enter');
+    assert.strictEqual(await page.evaluate(() => window.opened), 'https://www.google.com/search?q=royal%20gorge%20hours');
+    await page.fill('#search-input', 'news');
+    await page.press('#search-input', 'ArrowDown');
+    await page.press('#search-input', 'ArrowDown');
+    await page.press('#search-input', 'Enter');
+    assert.strictEqual(await page.evaluate(() => window.opened), 'https://news.google.com', 'arrow keys pick a suggestion');
+    await page.fill('#search-input', 'example.org/path');
+    assert.match(await page.textContent('.suggest.active'), /Go to example\.org\/path/);
+    await page.press('#search-input', 'Enter');
+    assert.strictEqual(await page.evaluate(() => window.opened), 'https://example.org/path');
+
+    // Editing bookmarks in the card.
+    await page.click('#edit-links');
+    assert.strictEqual(await page.locator('.link-row').count(), 10);
+    for (let i = 9; i >= 1; i--) await page.click(`.link-row[data-i="${i}"] [data-act=remove]`);
+    await page.click('#links-edit [data-act=add]');
+    assert.strictEqual(await page.evaluate(() => document.activeElement.className), 'link-row-name', 'new row is ready to type in');
+    await page.fill('.link-row[data-i="1"] .link-row-name', 'Canvas');
+    await page.fill('.link-row[data-i="1"] .link-row-url', 'canvas.instructure.com');
+    await page.click('#links-edit [data-act=add]');
+    await page.fill('.link-row[data-i="2"] .link-row-url', 'https://www.esv.org');
+    await page.click('.link-row[data-i="1"] [data-act=up]');
+    await page.click('#links-edit [data-act=add]'); // left empty: dropped
+    await page.click('#links-edit button[type=submit]');
+    assert(await page.isHidden('#links-edit'));
+    assert.deepStrictEqual(await page.locator('.link').evaluateAll(els => els.map(a => [a.querySelector('.link-name').textContent, a.getAttribute('href')])), [
+      ['Canvas', 'https://canvas.instructure.com'], ['Gmail', 'https://mail.google.com'], ['esv.org', 'https://www.esv.org']
+    ]);
+    await waitFor(async () => backend.sync.bookmarks && backend.sync.bookmarks.value.length === 3, 'bookmarks synced');
+    await page.click('#edit-links');
+    await page.click('.link-row[data-i="0"] [data-act=remove]');
+    await page.click('#links-edit [data-act=cancel]');
+    assert.strictEqual(await page.locator('.link').count(), 3, 'cancel keeps the bookmarks');
+
+    // Notes: a date stamp, and "- [ ]" lines become checkboxes.
+    await page.fill('#notes-text', 'Plan');
+    await page.click('#stamp-notes');
+    await page.click('#check-notes');
+    await page.keyboard.type('Call Sam');
+    assert.strictEqual(await page.inputValue('#notes-text'), 'Plan\n— Monday, September 28, 2026 —\n- [ ] Call Sam');
+    assert.strictEqual(await page.locator('#notes-checklist li').count(), 1);
+    await page.check('#notes-checklist input');
+    assert.strictEqual(await page.inputValue('#notes-text'), 'Plan\n— Monday, September 28, 2026 —\n- [x] Call Sam');
+    assert.strictEqual(await page.locator('#notes-checklist li.done').count(), 1);
+    await waitFor(async () => backend.sync.notes && backend.sync.notes.value.endsWith('- [x] Call Sam'), 'checked note synced');
+
+    // Cards: fold one down, and hide one on this device.
+    await page.click('#news .collapse-btn');
+    assert(await page.locator('#news').evaluate(el => el.classList.contains('collapsed')));
+    assert(await page.isHidden('#news-body'));
+    assert.strictEqual(await page.getAttribute('#news .collapse-btn', 'aria-expanded'), 'false');
     await page.click('.nav-settings');
-    await page.fill('#settings-form textarea[name=bookmarks]', 'Canvas | canvas.instructure.com\nhttps://www.esv.org');
+    await page.uncheck('#card-toggles input[value=inbox]');
+    await page.uncheck('#card-toggles input[value=notes]');
     await page.selectOption('#settings-form select[name=theme]', 'dark');
     await page.click('#settings-form button[type=submit]');
-    assert.strictEqual(await page.locator('.link').count(), 2);
-    assert.strictEqual(await page.getAttribute('.link >> nth=0', 'href'), 'https://canvas.instructure.com');
-    assert.strictEqual(await page.textContent('.link >> nth=1'), 'esv.org');
+    assert(await page.isHidden('#inbox'));
+    assert(await page.isHidden('#notes'));
+    assert(await page.isHidden('.nav a[href="#notes"]'));
+    assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 2 tasks due (1 overdue)', 'hidden inbox leaves the summary');
     assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
-    await waitFor(async () => backend.sync.bookmarks && backend.sync.bookmarks.value.length === 2, 'bookmarks synced');
+    await page.reload();
+    await page.waitForTimeout(300);
+    assert(await page.isHidden('#inbox'), 'hidden cards stay hidden');
+    assert(await page.locator('#news').evaluate(el => el.classList.contains('collapsed')), 'folded cards stay folded');
+    assert(await page.isVisible('#tasks'));
     assert.deepStrictEqual(errors, []);
     await ctx.close();
   }
@@ -393,7 +520,7 @@ async function run() {
     };
     const { page, ctx, errors } = await open({ backend, seed: settings({ workApiUrl: WORK_API, workApiKey: 'worksecret' }) });
     assert.strictEqual(backend.workGets[0].searchParams.get('parts'), 'tasks', 'only tasks are asked of the work account');
-    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['Personal · My Tasks 3', 'Personal · Church 1', 'Work 1']);
+    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['Personal · My Tasks 3 2 due', 'Personal · Church 1', 'Work 1']);
     await page.click('#task-tabs [data-list="W1"]');
     assert.strictEqual(await page.locator('.task-title').first().textContent(), 'Grade reports');
     await page.locator('input[data-task="w1"]').check();
@@ -418,8 +545,42 @@ async function run() {
     const backend = { sync: {}, gets: [], posts: [], tasks: newTasks(), workGets: [], workPosts: [], workTasks: [] };
     const { page, ctx } = await open({ backend, seed: settings({ workApiUrl: WORK_API, workApiKey: 'wrong' }) });
     assert.match(await page.textContent('#status'), /Work account: the API key does not match/);
-    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['My Tasks 3', 'Church 1']);
+    assert.deepStrictEqual((await page.locator('#task-tabs .tab').allTextContents()).map(t => t.trim()), ['My Tasks 3 2 due', 'Church 1']);
     assert.match(await page.textContent('.devo-title'), /Renunciation/);
+    await ctx.close();
+  }
+
+  // Evening: once today's events are over, the schedule leads with tomorrow.
+  {
+    const { page, ctx, errors } = await open({ seed: settings(), now: new Date('2026-09-28T19:30:00-06:00') });
+    assert.strictEqual(await page.textContent('#greeting'), 'Good evening, Miles');
+    assert.match(await page.textContent('#agenda-earlier summary'), /Earlier today\s*3 events/);
+    assert(!(await page.locator('#agenda-earlier').evaluate(el => el.open)), 'today starts folded');
+    const labels = await page.locator('.agenda-day-label').allTextContents();
+    assert.deepStrictEqual(labels.map(l => l.replace(/\s+/g, ' ').trim()), ['Tomorrow Tue, Sep 29', 'Wednesday Sep 30']);
+    assert.strictEqual(await page.locator('.agenda-day >> nth=0').locator('.tl-block').count(), 1, 'tomorrow gets the timeline');
+    assert.strictEqual(await page.textContent('.tl-open'), 'Longest open stretch: 10 AM – 5 PM (7 hr)');
+    assert.strictEqual(await page.textContent('#next-up'), 'Next: Tomorrow planning tomorrow at 9 AM');
+    assert(await page.isHidden('#next-join'));
+    assert.strictEqual(await page.textContent('#day-summary'), 'Tomorrow: 1 event, first at 9 AM · 2 tasks due (1 overdue) · 7 unread');
+    assert.strictEqual(await page.title(), '(7) DailyDash');
+    // Unfolding "Earlier today" survives the page's regular refresh.
+    await page.click('#agenda-earlier summary');
+    await page.clock.runFor(21 * 1000);
+    assert(await page.locator('#agenda-earlier').evaluate(el => el.open));
+    assert.strictEqual(await page.locator('#agenda-earlier .event').count(), 3);
+    await shot(page, 'evening', { fullPage: true });
+    assert.deepStrictEqual(errors, []);
+    await ctx.close();
+  }
+
+  // A meeting starting in a few minutes: countdown, Join button, and tab title.
+  {
+    const { page, ctx } = await open({ seed: settings(), now: new Date('2026-09-28T07:52:00-06:00') });
+    assert.strictEqual(await page.textContent('#next-up'), 'Next: Early standup in 8 min');
+    assert.strictEqual(await page.getAttribute('#next-join', 'href'), 'https://zoom.us/j/1');
+    assert.strictEqual(await page.title(), '(7) 8 min · Early standup');
+    assert.strictEqual(await page.textContent('#day-summary'), '3 more events today · 2 tasks due (1 overdue) · 7 unread');
     await ctx.close();
   }
 

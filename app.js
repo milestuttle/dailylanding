@@ -12,6 +12,17 @@
   const LEGACY_KEY = 'daily_dashboard_state_v1';
   const REFRESH_MS = 15 * 60 * 1000;
   const SCHEDULE_DAYS = 3; // today plus the next two days
+  const EVENING_HOUR = 18; // from 6 PM, once today's events are over, the schedule leads with tomorrow
+  const JOIN_EARLY_MINUTES = 10; // the header's Join button appears this long before a meeting
+  const CARDS = [
+    { id: 'devotional', name: 'Devotional' },
+    { id: 'schedule', name: 'Schedule' },
+    { id: 'tasks', name: 'Tasks' },
+    { id: 'inbox', name: 'Inbox' },
+    { id: 'links', name: 'Bookmarks' },
+    { id: 'news', name: 'News' },
+    { id: 'notes', name: 'Notes' }
+  ];
 
   const DEFAULT_BOOKMARKS = [
     { name: 'Gmail', url: 'https://mail.google.com' },
@@ -39,6 +50,10 @@
     notes: '',
     newsTab: '',
     taskList: '',
+    devoRead: '', // the date the devotional was last read (synced)
+    // This device only: cards folded down to their title, and cards not shown at all.
+    collapsed: [],
+    hiddenCards: [],
     place: null, // cached geocoding result: { query, name, lat, lon }
     // Sync bookkeeping: when each synced field was last edited, which ones
     // still need uploading, and whether this device has merged with the server yet.
@@ -46,7 +61,7 @@
     syncDirty: [],
     syncedOnce: false
   };
-  const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes'];
+  const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes', 'devoRead'];
 
   const $ = id => document.getElementById(id);
   let settings = loadSettings();
@@ -57,12 +72,17 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     applyTheme();
+    initCards();
+    initSearch();
     initDialogs();
+    initDevotional();
     initSettings();
     initEvents();
     initNotes();
     initNews();
     initTasks();
+    initInbox();
+    initLinks();
     initDetails();
     initNav();
     tick();
@@ -114,6 +134,8 @@
     const merged = Object.assign({}, DEFAULTS, saved || {});
     merged.syncAt = Object.assign({}, merged.syncAt);
     merged.syncDirty = Array.isArray(merged.syncDirty) ? merged.syncDirty.slice() : [];
+    merged.collapsed = Array.isArray(merged.collapsed) ? merged.collapsed.slice() : [];
+    merged.hiddenCards = Array.isArray(merged.hiddenCards) ? merged.hiddenCards.slice() : [];
     return merged;
   }
 
@@ -183,6 +205,149 @@
       loadWeather();
     }
     renderSchedule(); // keeps "now" and past-event styling current
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Cards: fold or hide each one (per device)                         */
+  /* ---------------------------------------------------------------- */
+
+  const cardOn = id => !settings.hiddenCards.includes(id);
+  // Whether each card has anything to show. Tasks and Inbox wait for the backend.
+  const cardAvailable = { tasks: false, inbox: false };
+
+  /** Shows or hides a card and its navigation link. Pass `available` when the card's content changes. */
+  function showCard(id, available) {
+    if (available !== undefined) cardAvailable[id] = available;
+    const visible = cardAvailable[id] !== false && cardOn(id);
+    $(id).hidden = !visible;
+    const nav = document.querySelector(`.nav a[href="#${id}"]`);
+    if (nav) nav.hidden = !visible;
+  }
+
+  function applyCards() {
+    CARDS.forEach(c => {
+      showCard(c.id);
+      const folded = settings.collapsed.includes(c.id);
+      const btn = $(c.id).querySelector('.collapse-btn');
+      $(c.id).classList.toggle('collapsed', folded);
+      btn.setAttribute('aria-expanded', String(!folded));
+      btn.setAttribute('aria-label', `${folded ? 'Expand' : 'Collapse'} ${c.name}`);
+      btn.title = folded ? 'Expand' : 'Collapse';
+    });
+  }
+
+  function initCards() {
+    CARDS.forEach(c => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-btn collapse-btn';
+      btn.innerHTML = icon('chevron');
+      btn.addEventListener('click', () => {
+        const folded = settings.collapsed.includes(c.id);
+        settings.collapsed = folded ? settings.collapsed.filter(id => id !== c.id) : settings.collapsed.concat(c.id);
+        saveSettings();
+        applyCards();
+      });
+      $(c.id).querySelector('.card-head').appendChild(btn);
+    });
+    applyCards();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Search: Google, a web address, or a bookmark by name              */
+  /* ---------------------------------------------------------------- */
+
+  const hostOf = url => { try { return new URL(url).hostname; } catch (e) { return ''; } };
+  const looksLikeUrl = q => /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(q);
+
+  /** Bookmarks matching what's typed: the name starts with it, then a word in the name does, then it's anywhere in the name or address. */
+  function bookmarkMatches(q) {
+    const want = q.trim().toLowerCase();
+    if (!want) return [];
+    return settings.bookmarks.map((b, i) => {
+      const name = b.name.toLowerCase();
+      const score = name.startsWith(want) ? 0
+        : name.split(/[\s\-_.|]+/).some(w => w.startsWith(want)) ? 1
+        : name.includes(want) ? 2
+        : hostOf(b.url).includes(want) ? 3 : -1;
+      return { b, i, score };
+    }).filter(m => m.score >= 0).sort((x, y) => x.score - y.score || x.i - y.i).slice(0, 5);
+  }
+
+  function initSearch() {
+    const form = $('search');
+    const input = $('search-input');
+    const list = $('search-suggest');
+    let options = [];
+    let active = -1;
+
+    const render = () => {
+      const open = options.length > 0 && document.activeElement === input;
+      list.hidden = !open;
+      input.setAttribute('aria-expanded', String(open));
+      list.innerHTML = options.map((o, i) => `<li id="suggest-${i}" role="option" class="suggest${i === active ? ' active' : ''}" aria-selected="${i === active}" data-i="${i}">${o.html}</li>`).join('');
+      if (active >= 0) input.setAttribute('aria-activedescendant', `suggest-${active}`);
+      else input.removeAttribute('aria-activedescendant');
+    };
+
+    const update = () => {
+      const q = input.value.trim();
+      options = [];
+      active = -1;
+      if (q) {
+        const matches = bookmarkMatches(q);
+        const web = looksLikeUrl(q)
+          ? { url: /^https?:/i.test(q) ? q : `https://${q}`, html: `${icon('globe')}<span class="suggest-name">Go to <strong>${esc(q)}</strong></span>` }
+          : { url: `https://www.google.com/search?q=${encodeURIComponent(q)}`, html: `${icon('search')}<span class="suggest-name">Search Google for <strong>${esc(q)}</strong></span>` };
+        const marks = matches.map(m => ({ url: m.b.url, html: `${icon('bookmark')}<span class="suggest-name">${esc(m.b.name)}</span><span class="muted small">${esc(hostOf(m.b.url).replace(/^www\./, ''))}</span>` }));
+        // Enter opens a bookmark whose name starts with (a word starting with) what's typed; otherwise it searches.
+        options = matches.length && matches[0].score <= 1 && !looksLikeUrl(q) ? marks.concat(web) : [web].concat(marks);
+        active = 0;
+      }
+      render();
+    };
+
+    const go = i => {
+      const o = options[i];
+      if (!o) return;
+      window.open(o.url, '_blank', 'noopener');
+      input.value = '';
+      update();
+      input.blur();
+    };
+
+    input.addEventListener('input', update);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); });
+    input.addEventListener('keydown', e => {
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && options.length) {
+        e.preventDefault();
+        active = (active + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+        render();
+      } else if (e.key === 'Escape') {
+        input.value = '';
+        update();
+        input.blur();
+      }
+    });
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      go(Math.max(active, 0));
+    });
+    // mousedown rather than click, so the list is still there (the input hasn't blurred yet).
+    list.addEventListener('mousedown', e => {
+      const li = e.target.closest('[data-i]');
+      if (!li) return;
+      e.preventDefault();
+      go(Number(li.dataset.i));
+    });
+    // "/" jumps to the search box from anywhere on the page.
+    document.addEventListener('keydown', e => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey || document.querySelector('dialog[open]')) return;
+      if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+      e.preventDefault();
+      input.focus();
+    });
   }
 
   /* ---------------------------------------------------------------- */
@@ -422,13 +587,21 @@
       const c = weather.current;
       const hl = [weather.high != null && `H ${weather.high}°`, weather.low != null && `L ${weather.low}°`].filter(Boolean).join(' ');
       $('weather-temp').textContent = c.temp != null ? `${c.temp}°` : '--°';
-      $('weather-desc').textContent = [c.text, hl].filter(Boolean).join(' · ');
+      $('weather-desc').textContent = [c.text, hl, weather.precip ? `${weather.precip}% rain` : ''].filter(Boolean).join(' · ');
       $('weather-icon').innerHTML = `<use href="#i-${c.icon}"/>`;
+      // The next six hours, beside the current conditions.
+      $('weather-strip').innerHTML = weather.hours.slice(1, 7).map(h => `<span class="wx-mini">
+          <span class="wx-mini-time">${h.time.toLocaleTimeString('en-US', { hour: 'numeric' }).replace(' ', '').toLowerCase()}</span>
+          ${icon(h.icon)}
+          <strong>${h.temp}°</strong>
+          <span class="wx-mini-rain">${h.precip >= 10 ? `${h.precip}%` : ''}</span>
+        </span>`).join('');
       chip.disabled = false;
       loadAlerts();
     } catch (e) {
       $('weather-temp').textContent = '--°';
       $('weather-desc').textContent = e.message || 'Weather unavailable';
+      $('weather-strip').innerHTML = '';
       chip.disabled = true;
     }
   }
@@ -569,10 +742,36 @@
   /* Devotional                                                        */
   /* ---------------------------------------------------------------- */
 
+  let devoExpanded = false; // today's reading shown again after it was marked read
+  let devoOpened = false; // the full reading is open; closing it marks today's as read
+
+  /** esv.org page for a reference such as "Luke 9:57" or "John 3:16 (ESV)". */
+  const esvUrl = ref => `https://www.esv.org/${encodeURIComponent(ref.replace(/\s*\([A-Z]+\)\s*$/, '')).replace(/%20/g, '+').replace(/%3A/gi, ':')}/`;
+
+  const verseHtml = devo => (devo.verseText ? `<blockquote class="verse"><p>${esc(devo.verseText)}</p>${devo.verseRef
+    ? `<cite><a href="${esc(esvUrl(devo.verseRef))}" target="_blank" rel="noopener" title="Read the passage at esv.org">${esc(devo.verseRef)}</a></cite>` : ''}</blockquote>` : '');
+
+  function markDevoRead() {
+    settings.devoRead = localDate();
+    devoExpanded = false;
+    markChanged(['devoRead']);
+    renderDevotional(todayPayload());
+  }
+
+  function initDevotional() {
+    $('devo-dialog').addEventListener('close', () => {
+      if (!devoOpened) return;
+      devoOpened = false;
+      if (settings.devoRead !== localDate()) markDevoRead();
+    });
+  }
+
   function renderDevotional(payload) {
     const body = $('devo-body');
     const devo = payload && payload.devotional;
     const siteLink = `<a class="btn btn-small btn-quiet" href="https://utmost.org/modern-classic/today/" target="_blank" rel="noopener">utmost.org ${icon('external')}</a>`;
+    const read = settings.devoRead === localDate();
+    $('devotional').classList.toggle('devo-read', !!devo && read && !devoExpanded);
 
     if (!devo) {
       const msg = !connected()
@@ -582,25 +781,53 @@
       return;
     }
 
+    // Once read, the card shrinks to one line for the rest of the day.
+    if (read && !devoExpanded) {
+      body.innerHTML = `
+        <div class="devo-done">
+          <span class="devo-check">${icon('tick')}</span>
+          <span class="devo-done-text"><span class="muted small">Read today</span><strong>${esc(devo.title)}</strong></span>
+          <button class="btn btn-small btn-quiet" type="button" id="devo-show">Show</button>
+        </div>`;
+      $('devo-show').addEventListener('click', () => {
+        devoExpanded = true;
+        renderDevotional(todayPayload());
+      });
+      return;
+    }
+
     body.innerHTML = `
       <h3 class="devo-title">${esc(devo.title)}</h3>
-      ${devo.verseText ? `<blockquote class="verse"><p>${esc(devo.verseText)}</p><cite>${esc(devo.verseRef)}</cite></blockquote>` : ''}
+      ${verseHtml(devo)}
       <p class="excerpt">${esc(devo.paragraphs[0])}</p>
       <div class="button-row">
         <button class="btn btn-primary btn-small" type="button" id="devo-read">Read</button>
         <button class="btn btn-small" type="button" data-speak>${icon('speaker')}Listen</button>
+        ${read
+          ? '<button class="btn btn-small btn-quiet" type="button" id="devo-hide">Hide</button>'
+          : `<button class="btn btn-small btn-quiet" type="button" id="devo-mark">${icon('tick')}Mark as read</button>`}
         <a class="btn btn-small btn-quiet" href="${esc(safeUrl(devo.url))}" target="_blank" rel="noopener">utmost.org ${icon('external')}</a>
       </div>`;
+
+    if (read) {
+      $('devo-hide').addEventListener('click', () => {
+        devoExpanded = false;
+        renderDevotional(todayPayload());
+      });
+    } else {
+      $('devo-mark').addEventListener('click', markDevoRead);
+    }
 
     $('devo-read').addEventListener('click', () => {
       $('devo-dialog-title').textContent = devo.title;
       $('devo-dialog-body').innerHTML = `
-        ${devo.verseText ? `<blockquote class="verse"><p>${esc(devo.verseText)}</p><cite>${esc(devo.verseRef)}</cite></blockquote>` : ''}
+        ${verseHtml(devo)}
         ${devo.paragraphs.map(p => `<p>${esc(p)}</p>`).join('')}
         <div class="button-row">
           <button class="btn btn-small" type="button" data-speak>${icon('speaker')}Listen</button>
           <a class="btn btn-small btn-quiet" href="${esc(safeUrl(devo.url))}" target="_blank" rel="noopener">Read on utmost.org ${icon('external')}</a>
         </div>`;
+      devoOpened = true;
       $('devo-dialog').showModal();
     });
   }
@@ -632,25 +859,11 @@
   /* Schedule                                                          */
   /* ---------------------------------------------------------------- */
 
-  function renderSchedule() {
-    const payload = todayPayload();
-    const body = $('schedule-body');
-    const nextUp = $('next-up');
-    const calendars = payload ? payload.calendars || [] : [];
-    $('add-event-btn').hidden = !calendars.some(c => c.writable);
+  let earlierOpen = false; // "Earlier today" unfolded in the evening view
 
-    if (!payload) {
-      body.innerHTML = `<p class="muted">${connected() ? 'Loading your calendar…' : 'Your calendar will show here once Settings is connected.'}</p>`;
-      nextUp.hidden = true;
-      return;
-    }
-
-    const now = Date.now();
-    const events = payload.events || [];
-    const dot = e => `<span class="cal-dot" data-cal="${Number(e.calIndex) % 4}" title="${esc(e.calendar)}"></span>`;
-
-    // One bucket per day. All-day events appear on every day they cover;
-    // timed events on the day they start (or the first day, if earlier).
+  /** One bucket per day. All-day events appear on every day they cover;
+   *  timed events on the day they start (or the first day, if earlier). */
+  function scheduleDays(payload) {
     const days = Array.from({ length: payload.days || 1 }, (_, i) => {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -659,7 +872,7 @@
       end.setDate(end.getDate() + 1);
       return { i, start: start.getTime(), end: end.getTime(), date: start, allDay: [], timed: [] };
     });
-    events.forEach(e => {
+    (payload.events || []).forEach(e => {
       const s = new Date(e.start).getTime();
       const end = new Date(e.end).getTime();
       if (e.allDay) {
@@ -669,22 +882,171 @@
         if (d) d.timed.push(e);
       }
     });
-    const dayName = d => (d.i === 0 ? 'Today' : d.i === 1 ? 'Tomorrow' : d.date.toLocaleDateString('en-US', { weekday: 'long' }));
+    return days;
+  }
 
-    const nextDay = days.find(d => d.timed.some(e => new Date(e.end) > now));
-    const next = nextDay && nextDay.timed.find(e => new Date(e.end) > now);
-    if (next) {
-      const starts = new Date(next.start);
-      const when = nextDay.i === 0 ? `at ${fmtTime(starts)}` : `${dayName(nextDay).toLowerCase()} at ${fmtTime(starts)}`;
-      nextUp.textContent = starts <= now ? `Now: ${next.title}` : `Next: ${next.title} ${when}`;
+  const dayName = d => (d.i === 0 ? 'Today' : d.i === 1 ? 'Tomorrow' : d.date.toLocaleDateString('en-US', { weekday: 'long' }));
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  /** "25 min", "2 hr", "1 hr 20 min". */
+  function fmtDuration(mins) {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return !h ? `${m} min` : m ? `${h} hr ${m} min` : `${h} hr`;
+  }
+
+  /** From EVENING_HOUR, once today's timed events are over, the schedule leads with tomorrow. */
+  const isEvening = (days, now) => new Date(now).getHours() >= EVENING_HOUR && days.length > 1 && !days[0].timed.some(e => new Date(e.end) > now);
+
+  /** Tasks due today or earlier, across every list. */
+  function dueTasks() {
+    const lists = taskLists();
+    const today = localDate();
+    return lists ? lists.flatMap(l => l.items).filter(t => !t.done && t.due && t.due <= today) : [];
+  }
+
+  /** The lines under the greeting, the header's Join button, and the browser tab's title. */
+  function renderHeader() {
+    const payload = todayPayload();
+    const nextUp = $('next-up');
+    const join = $('next-join');
+    const summary = $('day-summary');
+    const now = Date.now();
+    const days = payload ? scheduleDays(payload) : [];
+    const upcoming = days.flatMap(d => d.timed.map(e => ({ e, d }))).filter(x => new Date(x.e.end) > now);
+    let tabTitle = '';
+
+    if (upcoming.length) {
+      const { e, d } = upcoming[0];
+      const starts = new Date(e.start);
+      const mins = Math.ceil((starts - now) / 60000);
+      if (starts <= now) {
+        nextUp.textContent = `Now: ${e.title} · until ${fmtTime(new Date(e.end))}`;
+        tabTitle = `Now: ${e.title}`;
+      } else if (mins <= 120) {
+        nextUp.textContent = `Next: ${e.title} in ${fmtDuration(mins)}`;
+        if (mins <= 60) tabTitle = `${fmtDuration(mins)} · ${e.title}`;
+      } else {
+        nextUp.textContent = `Next: ${e.title} ${d.i === 0 ? '' : `${dayName(d).toLowerCase()} `}at ${fmtTime(starts)}`;
+      }
       nextUp.hidden = false;
     } else {
       nextUp.hidden = true;
     }
 
-    const renderDay = d => `
-      <div class="agenda-day">
-        <h3 class="agenda-day-label">${dayName(d)} <span class="muted">${d.date.toLocaleDateString('en-US', d.i < 2 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' })}</span></h3>
+    // A meeting link that's live now or starts within a few minutes.
+    const joinable = upcoming.find(x => x.e.joinUrl && new Date(x.e.start) - now <= JOIN_EARLY_MINUTES * 60000);
+    join.hidden = !joinable;
+    if (joinable) {
+      join.href = safeUrl(joinable.e.joinUrl);
+      join.title = `Join ${joinable.e.title}`;
+      join.setAttribute('aria-label', `Join ${joinable.e.title}`);
+    }
+
+    const parts = [];
+    if (days.length && cardOn('schedule')) {
+      if (isEvening(days, now)) {
+        const t = days[1].timed;
+        parts.push(t.length ? `Tomorrow: ${plural(t.length, 'event')}, first at ${fmtTime(new Date(t[0].start))}` : 'Nothing scheduled tomorrow');
+      } else {
+        const later = days[0].timed.filter(e => new Date(e.start) > now).length;
+        if (later) parts.push(`${plural(later, 'more event')} today`);
+        else if (days[0].timed.length) parts.push('No more events today');
+      }
+    }
+    if (cardOn('tasks')) {
+      const due = dueTasks();
+      const overdue = due.filter(t => t.due < localDate()).length;
+      if (due.length) parts.push(`${plural(due.length, 'task')} due${overdue ? ` (${overdue} overdue)` : ''}`);
+    }
+    const unread = payload && payload.inbox && cardOn('inbox') ? payload.inbox.unread : 0;
+    if (unread) parts.push(`${unread} unread`);
+    summary.textContent = parts.join(' · ');
+    summary.hidden = !parts.length;
+
+    document.title = `${unread ? `(${unread}) ` : ''}${tabTitle || 'DailyDash'}`;
+  }
+
+  /** A bar across one day showing when it's busy, with the longest open stretch. */
+  function timeline(d, events, now) {
+    if (!d.timed.length) return '';
+    const at = h => { const x = new Date(d.start); x.setHours(h, 0, 0, 0); return x.getTime(); };
+    // The working day, stretched to fit any event outside it.
+    let from = 8;
+    let to = 17;
+    d.timed.forEach(e => {
+      const s = new Date(e.start);
+      const end = new Date(e.end);
+      from = Math.min(from, s.getTime() < d.start ? 0 : s.getHours());
+      to = Math.max(to, end.getTime() >= d.end ? 24 : end.getHours() + (end.getMinutes() ? 1 : 0));
+    });
+    const t0 = at(from);
+    const t1 = to === 24 ? d.end : at(to);
+    const pct = t => ((Math.min(Math.max(t, t0), t1) - t0) / (t1 - t0)) * 100;
+
+    // Overlapping events split the bar's height, up to three rows.
+    const laneEnds = [];
+    const blocks = d.timed.map(e => {
+      const s = new Date(e.start).getTime();
+      const end = new Date(e.end).getTime();
+      let lane = laneEnds.findIndex(x => x <= s);
+      if (lane < 0) lane = Math.min(laneEnds.length, 2);
+      laneEnds[lane] = Math.max(laneEnds[lane] || 0, end);
+      return { e, s, end, lane };
+    });
+
+    // The longest open stretch (from now, for today) of at least half an hour.
+    const quarter = 15 * 60000;
+    let cursor = d.i === 0 ? Math.max(t0, Math.ceil(now / quarter) * quarter) : t0;
+    let best = null;
+    const consider = (a, b) => { if (b - a >= 30 * 60000 && (!best || b - a > best.b - best.a)) best = { a, b }; };
+    blocks.slice().sort((x, y) => x.s - y.s).forEach(b => {
+      consider(cursor, b.s);
+      cursor = Math.max(cursor, b.end);
+    });
+    consider(cursor, t1);
+    const open = best ? `Longest open stretch: ${fmtTime(new Date(best.a))} – ${fmtTime(new Date(best.b))} (${fmtDuration((best.b - best.a) / 60000)})`
+      : d.i === 0 && cursor < t1 ? 'No open time left today' : '';
+
+    const step = to - from > 12 ? 3 : 2;
+    const ticks = [];
+    for (let h = from; h <= to; h++) if (h % step === 0) ticks.push(h);
+    const hourLabel = h => new Date(at(h)).toLocaleTimeString('en-US', { hour: 'numeric' });
+
+    return `<div class="timeline" style="--lanes:${Math.max(laneEnds.length, 1)}">
+      <div class="tl-track" aria-hidden="true">
+        ${ticks.map(h => `<span class="tl-tick" style="left:${pct(at(h))}%"></span>`).join('')}
+        ${blocks.map(b => {
+          const label = `${fmtTime(new Date(b.s))} – ${fmtTime(new Date(b.end))} · ${b.e.title}`;
+          return `<button type="button" tabindex="-1" class="tl-block${b.end <= now ? ' past' : ''}" data-event="${events.indexOf(b.e)}" data-cal="${Number(b.e.calIndex) % 4}" title="${esc(label)}"
+            style="left:${pct(b.s)}%;width:${Math.max(pct(b.end) - pct(b.s), 0.8)}%;--lane:${b.lane}"></button>`;
+        }).join('')}
+        ${d.i === 0 && now > t0 && now < t1 ? `<span class="tl-now" style="left:${pct(now)}%"></span>` : ''}
+      </div>
+      <div class="tl-labels" aria-hidden="true">${ticks.map(h => `<span class="${h === from ? 'start' : h === to ? 'end' : ''}" style="left:${pct(at(h))}%">${hourLabel(h)}</span>`).join('')}</div>
+      ${open ? `<p class="tl-open muted small">${open}</p>` : ''}
+    </div>`;
+  }
+
+  function renderSchedule() {
+    const payload = todayPayload();
+    const body = $('schedule-body');
+    const calendars = payload ? payload.calendars || [] : [];
+    $('add-event-btn').hidden = !calendars.some(c => c.writable);
+    renderHeader();
+
+    if (!payload) {
+      body.innerHTML = `<p class="muted">${connected() ? 'Loading your calendar…' : 'Your calendar will show here once Settings is connected.'}</p>`;
+      return;
+    }
+
+    const now = Date.now();
+    const events = payload.events || [];
+    const days = scheduleDays(payload);
+    const evening = isEvening(days, now);
+    const dot = e => `<span class="cal-dot" data-cal="${Number(e.calIndex) % 4}" title="${esc(e.calendar)}"></span>`;
+
+    const dayEvents = d => `
         ${d.allDay.length ? `<ul class="all-day">${d.allDay.map(e => `<li><button type="button" class="chip-btn" data-event="${events.indexOf(e)}">${dot(e)}${esc(e.title)}</button></li>`).join('')}</ul>` : ''}
         ${d.timed.length ? `<ol class="events">${d.timed.map(e => {
           const s = new Date(e.start);
@@ -702,12 +1064,27 @@
             ${e.joinUrl && state !== 'past' ? `<a class="btn btn-small join-btn ${soon ? 'btn-primary' : ''}" href="${esc(safeUrl(e.joinUrl))}" target="_blank" rel="noopener">${icon('video')}Join</a>` : ''}
           </li>`;
         }).join('')}</ol>` : ''}
-        ${!d.allDay.length && !d.timed.length ? '<p class="muted small">Nothing scheduled</p>' : ''}
+        ${!d.allDay.length && !d.timed.length ? '<p class="muted small">Nothing scheduled</p>' : ''}`;
+
+    // The first day shown in full gets the timeline: today, or tomorrow in the evening.
+    const renderDay = (d, first) => `
+      <div class="agenda-day">
+        <h3 class="agenda-day-label">${dayName(d)} <span class="muted">${d.date.toLocaleDateString('en-US', d.i < 2 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' })}</span></h3>
+        ${first ? timeline(d, events, now) : ''}
+        ${dayEvents(d)}
       </div>`;
+
+    const earlier = d => `
+      <details class="agenda-earlier" id="agenda-earlier"${earlierOpen ? ' open' : ''}>
+        <summary>Earlier today <span class="muted">${d.timed.length ? plural(d.timed.length, 'event') : 'Nothing scheduled'}</span></summary>
+        ${dayEvents(d)}
+      </details>`;
 
     body.innerHTML = `
       ${calendars.length > 1 ? `<div class="legend">${calendars.map(c => `<span>${dot({ calIndex: c.index, calendar: c.name })}${esc(c.name)}</span>`).join('')}</div>` : ''}
-      ${days.map(renderDay).join('')}`;
+      ${evening
+        ? earlier(days[0]) + days.slice(1).map((d, i) => renderDay(d, i === 0)).join('')
+        : days.map((d, i) => renderDay(d, i === 0)).join('')}`;
   }
 
   function initEvents() {
@@ -778,6 +1155,12 @@
   const GUEST_STATUS = { accepted: 'Going', tentative: 'Maybe', declined: 'Declined', needsAction: 'Invited' };
 
   function initDetails() {
+    // Remember "Earlier today" being unfolded, since the schedule re-renders every few seconds.
+    // (On click, before it opens: its toggle event can arrive after a re-render has replaced it.)
+    $('schedule-body').addEventListener('click', e => {
+      const summary = e.target.closest('#agenda-earlier > summary');
+      if (summary) earlierOpen = !summary.parentElement.open;
+    });
     $('schedule-body').addEventListener('click', e => {
       const btn = e.target.closest('[data-event]');
       const payload = todayPayload();
@@ -862,19 +1245,27 @@
 
   function renderTasks() {
     const lists = taskLists();
-    $('tasks').hidden = !lists;
-    $('nav-tasks').hidden = !lists;
+    showCard('tasks', !!lists);
+    renderHeader();
     if (!lists) return;
     const active = activeTaskList();
+    const today = localDate();
     const open = l => l.items.filter(t => !t.done).length;
+    // Due today or overdue; the tab's badge turns red if any are overdue.
+    const due = l => l.items.filter(t => !t.done && t.due && t.due <= today);
+    const dueBadge = l => {
+      const d = due(l);
+      return d.length ? ` <span class="tab-due${d.some(t => t.due < today) ? ' overdue' : ''}">${d.length} due</span>` : '';
+    };
+    const urgency = t => (t.done || !t.due ? '' : t.due < today ? ' overdue' : t.due === today ? ' due-today' : '');
     $('task-tabs').innerHTML = lists.length > 1
-      ? lists.map(l => `<button type="button" role="tab" class="tab" data-list="${esc(l.id)}" aria-selected="${l === active}">${esc(taskListLabel(l, lists))}${open(l) ? ` <span class="tab-count">${open(l)}</span>` : ''}</button>`).join('')
+      ? lists.map(l => `<button type="button" role="tab" class="tab" data-list="${esc(l.id)}" aria-selected="${l === active}">${esc(taskListLabel(l, lists))}${open(l) ? ` <span class="tab-count">${open(l)}</span>` : ''}${dueBadge(l)}</button>`).join('')
       : '';
     $('task-add').hidden = !active;
     $('task-list').innerHTML = !active ? '<li class="muted">No task lists yet.</li>'
       : !active.items.length ? '<li class="muted task-empty">All done.</li>'
       : active.items.map(t => `
-        <li class="task${t.parent ? ' sub' : ''}${t.done ? ' done' : ''}">
+        <li class="task${t.parent ? ' sub' : ''}${t.done ? ' done' : ''}${urgency(t)}">
           <label>
             <input type="checkbox" data-task="${esc(t.id)}"${t.done ? ' checked' : ''}>
             <span class="task-title">${esc(t.title)}</span>
@@ -948,7 +1339,7 @@
 
   function renderInbox(payload) {
     const inbox = payload && payload.inbox;
-    $('inbox').hidden = !inbox;
+    showCard('inbox', !!inbox);
     if (!inbox) return;
     const base = `https://mail.google.com/mail/?authuser=${encodeURIComponent(inbox.email)}`;
     $('inbox-open').href = `${base}#inbox`;
@@ -957,9 +1348,9 @@
     const more = inbox.unread - inbox.threads.length;
     $('inbox-list').innerHTML = !inbox.threads.length
       ? '<li class="muted">Nothing unread.</li>'
-      : inbox.threads.map(t => `
+      : inbox.threads.map((t, i) => `
         <li>
-          <a class="thread" href="${base}#inbox/${encodeURIComponent(t.id)}" target="_blank" rel="noopener">
+          <a class="thread" href="${base}#inbox/${encodeURIComponent(t.id)}" target="_blank" rel="noopener" data-thread="${i}">
             <span class="thread-top">
               <strong class="thread-from">${esc(t.from)}${t.count > 1 ? ` <span class="muted">${t.count}</span>` : ''}</strong>
               <span class="muted small">${relativeTime(t.date)}</span>
@@ -968,6 +1359,52 @@
             ${t.snippet ? `<span class="muted small thread-snippet">${esc(t.snippet)}</span>` : ''}
           </a>
         </li>`).join('') + (more > 0 ? `<li class="thread-more"><a href="${base}#inbox" target="_blank" rel="noopener">${more} more unread</a></li>` : '');
+  }
+
+  const messages = new Map(); // fetched previews, by conversation and its latest date
+  let messageShown = '';
+
+  function initInbox() {
+    // A plain click previews the message here; Cmd/Ctrl/Shift-click still opens Gmail.
+    $('inbox-list').addEventListener('click', e => {
+      const a = e.target.closest('[data-thread]');
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      const payload = todayPayload();
+      const t = payload && payload.inbox && payload.inbox.threads[Number(a.dataset.thread)];
+      if (!t) return;
+      e.preventDefault();
+      openMessage(t, a.href);
+    });
+  }
+
+  async function openMessage(t, gmailUrl) {
+    const body = $('message-body');
+    const key = t.id + t.date;
+    const show = m => {
+      body.innerHTML = `
+        ${m.to || m.count > 1 ? `<p class="muted small message-meta">${[m.to && `To ${esc(m.to)}`, m.count > 1 && `Latest of ${m.count} messages`].filter(Boolean).join(' · ')}</p>` : ''}
+        <div class="message-text">${linkify(m.body || t.snippet || '(no text)')}</div>`;
+    };
+    messageShown = key;
+    $('message-subject').textContent = t.subject;
+    $('message-meta').textContent = `${t.from} · ${relativeTime(t.date)}`;
+    $('message-open').href = gmailUrl;
+    if (messages.has(key)) show(messages.get(key));
+    else body.innerHTML = '<p class="muted">Loading…</p>';
+    $('message-dialog').showModal();
+    if (messages.has(key)) return;
+    try {
+      const res = await post({ action: 'message', threadId: t.id });
+      messages.set(key, res.message);
+      if (messageShown === key) show(res.message);
+    } catch (err) {
+      if (messageShown !== key) return;
+      body.innerHTML = `
+        ${t.snippet ? `<div class="message-text">${esc(t.snippet)}…</div>` : ''}
+        <p class="muted small">${/unknown action/i.test(err.message)
+          ? 'To read whole messages here, update your Apps Script to the latest Code.gs.'
+          : `Couldn't load the whole message: ${esc(err.message)}`}</p>`;
+    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -1068,34 +1505,184 @@
     [/reddit/, 'message'], [/facebook/, 'users']
   ];
 
+  // Site icons come from Google's favicon service; the glyph or first letter shows if there isn't one.
+  const faviconUrl = host => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+  let linkDraft = null; // bookmarks being edited in the card, or null
+
   function renderLinks() {
     $('links-body').innerHTML = settings.bookmarks.map(b => {
       const match = LINK_ICONS.find(([re]) => re.test(b.url.toLowerCase()));
       const glyph = match ? icon(match[1]) : `<span class="monogram">${esc((b.name || '?').trim().charAt(0).toUpperCase())}</span>`;
-      return `<a class="link" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener"><span class="link-icon">${glyph}</span><span class="link-name">${esc(b.name)}</span></a>`;
+      const host = hostOf(b.url);
+      const img = host ? `<img src="${esc(faviconUrl(host))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
+      return `<a class="link" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener"><span class="link-icon">${img}<span class="link-glyph">${glyph}</span></span><span class="link-name">${esc(b.name)}</span></a>`;
     }).join('');
   }
 
-  function parseBookmarks(text) {
-    return text.split('\n').map(line => {
-      const bar = line.lastIndexOf('|');
-      const name = (bar >= 0 ? line.slice(0, bar) : '').trim();
-      let url = (bar >= 0 ? line.slice(bar + 1) : line).trim();
-      if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
-      return url ? { name: name || url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url } : null;
-    }).filter(Boolean);
+  /** Trims a bookmark, adds https:// if needed, and names it after its site if unnamed. Null without an address. */
+  function cleanBookmark(b) {
+    let url = (b.url || '').trim();
+    if (!url) return null;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    return { name: (b.name || '').trim() || url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url };
+  }
+
+  function renderLinkEditor() {
+    const form = $('links-edit');
+    const editing = !!linkDraft;
+    form.hidden = !editing;
+    $('links-body').hidden = editing;
+    $('edit-links').hidden = editing;
+    if (!editing) { form.innerHTML = ''; return; }
+    const last = linkDraft.length - 1;
+    form.innerHTML = `
+      <ol class="link-rows">${linkDraft.map((b, i) => `
+        <li class="link-row" data-i="${i}">
+          <input class="link-row-name" value="${esc(b.name)}" placeholder="Name" aria-label="Bookmark ${i + 1} name" autocomplete="off">
+          <input class="link-row-url" value="${esc(b.url)}" placeholder="https://…" aria-label="Bookmark ${i + 1} address" inputmode="url" autocomplete="off" spellcheck="false">
+          <span class="link-row-btns">
+            <button type="button" class="icon-btn" data-act="up" aria-label="Move up"${i === 0 ? ' disabled' : ''}>${icon('up')}</button>
+            <button type="button" class="icon-btn" data-act="down" aria-label="Move down"${i === last ? ' disabled' : ''}>${icon('chevron')}</button>
+            <button type="button" class="icon-btn" data-act="remove" aria-label="Remove">${icon('x')}</button>
+          </span>
+        </li>`).join('')}</ol>
+      <div class="button-row">
+        <button type="button" class="btn btn-small" data-act="add">${icon('plus')}Add bookmark</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-small btn-quiet" data-act="cancel">Cancel</button>
+        <button type="submit" class="btn btn-small btn-primary">Done</button>
+      </div>`;
+  }
+
+  /** Copies what's typed in the editor into the draft. */
+  function readLinkDraft() {
+    $('links-edit').querySelectorAll('.link-row').forEach(row => {
+      const b = linkDraft[Number(row.dataset.i)];
+      b.name = row.querySelector('.link-row-name').value;
+      b.url = row.querySelector('.link-row-url').value;
+    });
+  }
+
+  function initLinks() {
+    const body = $('links-body');
+    const form = $('links-edit');
+    // No site icon (or only a tiny placeholder): fall back to the glyph.
+    body.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
+    body.addEventListener('load', e => { if (e.target.tagName === 'IMG' && e.target.naturalWidth < 32) e.target.remove(); }, true);
+
+    $('edit-links').addEventListener('click', () => {
+      linkDraft = settings.bookmarks.map(b => Object.assign({}, b));
+      if (!linkDraft.length) linkDraft.push({ name: '', url: '' });
+      renderLinkEditor();
+    });
+
+    form.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      readLinkDraft();
+      const row = btn.closest('[data-i]');
+      const i = row ? Number(row.dataset.i) : -1;
+      const act = btn.dataset.act;
+      let focus = null;
+      if (act === 'up' || act === 'down') {
+        const j = act === 'up' ? i - 1 : i + 1;
+        [linkDraft[i], linkDraft[j]] = [linkDraft[j], linkDraft[i]];
+        focus = `[data-i="${j}"] [data-act="${act}"]`;
+      } else if (act === 'remove') {
+        linkDraft.splice(i, 1);
+      } else if (act === 'add') {
+        linkDraft.push({ name: '', url: '' });
+        focus = `[data-i="${linkDraft.length - 1}"] .link-row-name`;
+      } else if (act === 'cancel') {
+        linkDraft = null;
+      }
+      renderLinkEditor();
+      const el = focus && form.querySelector(focus);
+      if (el && !el.disabled) el.focus();
+    });
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      readLinkDraft();
+      const next = linkDraft.map(cleanBookmark).filter(Boolean);
+      linkDraft = null;
+      if (!sameValue(next, settings.bookmarks)) {
+        settings.bookmarks = next;
+        markChanged(['bookmarks']);
+      }
+      renderLinks();
+      renderLinkEditor();
+    });
   }
 
   /* ---------------------------------------------------------------- */
   /* Notes                                                             */
   /* ---------------------------------------------------------------- */
 
+  const CHECK_LINE = /^(\s*[-*] \[)([ xX])\](.*)$/;
+
+  /** Lines written as "- [ ] item" also show as checkboxes under the notes. */
+  function renderChecklist() {
+    const items = $('notes-text').value.split('\n').map((line, i) => {
+      const m = line.match(CHECK_LINE);
+      return m && { i, done: m[2] !== ' ', text: m[3].trim() };
+    }).filter(Boolean);
+    const list = $('notes-checklist');
+    list.hidden = !items.length;
+    list.innerHTML = items.map(it => `<li class="${it.done ? 'done' : ''}"><label><input type="checkbox" data-line="${it.i}"${it.done ? ' checked' : ''}><span>${esc(it.text) || '&nbsp;'}</span></label></li>`).join('');
+  }
+
   function initNotes() {
     const text = $('notes-text');
     const status = $('notes-status');
     let timer;
+    let caret = null; // where the cursor was when the box last lost focus
     text.value = settings.notes || '';
+    renderChecklist();
+    text.addEventListener('blur', () => { caret = text.selectionStart; });
+
+    /** Replaces text between `from` and `to`, leaves the cursor at `cursorAt`, and saves. */
+    const edit = (from, to, str, cursorAt) => {
+      text.focus();
+      text.setRangeText(str, from, to, 'end');
+      if (cursorAt != null) text.setSelectionRange(cursorAt, cursorAt);
+      text.dispatchEvent(new Event('input'));
+    };
+    const cursor = () => (document.activeElement === text ? text.selectionStart : caret != null ? Math.min(caret, text.value.length) : text.value.length);
+
+    $('stamp-notes').addEventListener('click', () => {
+      const pos = cursor();
+      const before = text.value.slice(0, pos);
+      const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      edit(pos, pos, `${before && !before.endsWith('\n') ? '\n' : ''}— ${date} —\n`);
+    });
+
+    // Makes the current line a checkbox, or starts a new checkbox line after it.
+    $('check-notes').addEventListener('click', () => {
+      const pos = cursor();
+      const v = text.value;
+      const lineStart = v.lastIndexOf('\n', pos - 1) + 1;
+      const nl = v.indexOf('\n', pos);
+      const lineEnd = nl < 0 ? v.length : nl;
+      const line = v.slice(lineStart, lineEnd);
+      if (CHECK_LINE.test(line)) edit(lineEnd, lineEnd, '\n- [ ] ');
+      else edit(lineStart, lineStart, '- [ ] ', lineEnd + 6);
+    });
+
+    $('notes-checklist').addEventListener('change', e => {
+      const box = e.target.closest('input[data-line]');
+      if (!box) return;
+      const lines = text.value.split('\n');
+      const i = Number(box.dataset.line);
+      const m = (lines[i] || '').match(CHECK_LINE);
+      if (!m) return;
+      lines[i] = `${m[1]}${box.checked ? 'x' : ' '}]${m[3]}`;
+      text.value = lines.join('\n');
+      text.dispatchEvent(new Event('input'));
+    });
+
     text.addEventListener('input', () => {
+      renderChecklist();
       clearTimeout(timer);
       timer = setTimeout(() => {
         settings.notes = text.value;
@@ -1195,6 +1782,7 @@
       if (!r || l.includes(r)) return local;
       return `${remote.trimEnd()}\n\n${local.trim()}`;
     }
+    if (field === 'devoRead') return (remote || '') > (local || '') ? remote : local;
     if (field === 'bookmarks') {
       if (sameValue(local, DEFAULT_BOOKMARKS)) return remote;
       const urls = new Set(remote.map(b => b.url));
@@ -1240,12 +1828,14 @@
     if (changed.includes('name')) tick();
     if (changed.includes('bookmarks')) renderLinks();
     if (changed.includes('city')) loadWeather();
+    if (changed.includes('devoRead')) renderDevotional(todayPayload());
     // Update the notes box unless it holds typing that hasn't been saved yet.
     const box = $('notes-text');
     if (changed.includes('notes') && box.value === shownNotes) {
       const caret = Math.min(box.selectionStart, settings.notes.length);
       box.value = settings.notes;
       if (document.activeElement === box) box.setSelectionRange(caret, caret);
+      renderChecklist();
     }
     if (!fromPush && settings.syncDirty.length) {
       clearTimeout(syncTimer);
@@ -1274,6 +1864,8 @@
   function initSettings() {
     const dialog = $('settings-dialog');
     const form = $('settings-form');
+    $('card-toggles').innerHTML = CARDS.map(c => `<label class="check"><input type="checkbox" name="card" value="${c.id}">${esc(c.name)}</label>`).join('');
+    const cardBoxes = () => [...form.querySelectorAll('input[name=card]')];
 
     document.addEventListener('click', e => {
       const opener = e.target.closest('[data-open-settings]');
@@ -1285,12 +1877,8 @@
       form.apiKey.value = settings.apiKey;
       form.workApiUrl.value = settings.workApiUrl;
       form.workApiKey.value = settings.workApiKey;
-      form.bookmarks.value = settings.bookmarks.map(b => `${b.name} | ${b.url}`).join('\n');
+      cardBoxes().forEach(b => { b.checked = cardOn(b.value); });
       dialog.showModal();
-      if (opener.dataset.openSettings === 'bookmarks') {
-        form.bookmarks.focus();
-        $('bookmarks-field').scrollIntoView({ block: 'center' });
-      }
     });
 
     form.addEventListener('submit', e => {
@@ -1305,14 +1893,14 @@
         apiKey: form.apiKey.value.trim(),
         workApiUrl: form.workApiUrl.value.trim(),
         workApiKey: form.workApiKey.value.trim(),
-        bookmarks: parseBookmarks(form.bookmarks.value)
+        hiddenCards: cardBoxes().filter(b => !b.checked).map(b => b.value)
       });
       saveSettings();
       markChanged(SYNC_FIELDS.filter((f, i) => JSON.stringify(settings[f]) !== beforeSynced[i]));
       dialog.close();
       applyTheme();
+      applyCards();
       tick();
-      renderLinks();
       if (settings.city !== before.city) loadWeather();
       if (settings.apiUrl !== before.apiUrl || settings.apiKey !== before.apiKey) {
         settings.syncedOnce = false; // merge with whatever the new connection has stored

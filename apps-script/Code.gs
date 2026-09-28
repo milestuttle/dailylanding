@@ -54,10 +54,11 @@ const NEWS_PER_CATEGORY = 8;
 const CACHE_SECONDS = { calendar: 1200, devotional: 21600, news: 1800, tasks: 300, inbox: 180 };
 const WARM_EVERY_MINUTES = 10;
 const WARM_HOURS = { from: 5, to: 23 }; // skip overnight to save your daily Apps Script quota
-const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes'];
+const SYNC_FIELDS = ['name', 'city', 'bookmarks', 'notes', 'devoRead'];
 const MAX_DESCRIPTION_CHARS = 2000;
 const MAX_ATTENDEES = 30;
 const INBOX_THREADS = 5;
+const MAX_MESSAGE_CHARS = 20000;
 // Video meeting links recognized in event locations and descriptions.
 const JOIN_URL_RES = [
   /https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i,
@@ -86,6 +87,7 @@ function doPost(e) {
     if (params.action === 'saveSync') return saveSync_(params);
     if (params.action === 'addTask') return addTask_(params);
     if (params.action === 'setTaskDone') return setTaskDone_(params);
+    if (params.action === 'message') return message_(params);
     throw new Error('Unknown action');
   });
 }
@@ -624,17 +626,60 @@ function inbox_() {
   const threads = (list.threads || []).map(t => {
     const thread = Gmail.Users.Threads.get('me', t.id, { format: 'metadata', metadataHeaders: ['From', 'Subject'] });
     const last = thread.messages[thread.messages.length - 1];
-    const header = name => ((last.payload.headers || []).filter(h => h.name.toLowerCase() === name.toLowerCase())[0] || {}).value || '';
     return {
       id: t.id,
-      from: senderName_(header('From')),
-      subject: header('Subject') || '(no subject)',
+      from: senderName_(header_(last, 'From')),
+      subject: header_(last, 'Subject') || '(no subject)',
       snippet: decodeEntities_(last.snippet || '').slice(0, 160),
       date: new Date(Number(last.internalDate)).toISOString(),
       count: thread.messages.length
     };
   });
   return { email: email, unread: unread, threads: threads };
+}
+
+/** The newest message in a conversation as plain text, for the inbox preview. Reading it doesn't mark it read. */
+function message_(p) {
+  if (typeof Gmail === 'undefined') throw new Error('The Gmail service is not enabled in Apps Script');
+  if (!p.threadId) throw new Error('A conversation is required');
+  const thread = Gmail.Users.Threads.get('me', String(p.threadId), { format: 'full' });
+  const last = thread.messages[thread.messages.length - 1];
+  const body = messageText_(last.payload);
+  return {
+    message: {
+      from: header_(last, 'From'),
+      to: header_(last, 'To'),
+      subject: header_(last, 'Subject') || '(no subject)',
+      date: new Date(Number(last.internalDate)).toISOString(),
+      count: thread.messages.length,
+      body: body.length > MAX_MESSAGE_CHARS ? body.slice(0, MAX_MESSAGE_CHARS).trim() + '…' : body
+    }
+  };
+}
+
+function header_(message, name) {
+  const wanted = name.toLowerCase();
+  return ((message.payload.headers || []).filter(h => h.name.toLowerCase() === wanted)[0] || {}).value || '';
+}
+
+/** The text/plain part if there is one, otherwise the text/html part converted to text. */
+function messageText_(payload) {
+  let plain = '';
+  let html = '';
+  (function walk(part) {
+    if (!part) return;
+    const mime = String(part.mimeType || '').toLowerCase();
+    const data = part.body && part.body.data;
+    if (data && mime === 'text/plain' && !plain) plain = decodePart_(data);
+    if (data && mime === 'text/html' && !html) html = decodePart_(data);
+    (part.parts || []).forEach(walk);
+  })(payload);
+  const text = plain ? plain.replace(/\r\n/g, '\n') : htmlToLines_(html.replace(/\s+/g, ' '));
+  return text.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function decodePart_(data) {
+  return Utilities.newBlob(Utilities.base64DecodeWebSafe(data)).getDataAsString('UTF-8');
 }
 
 /** "Jane Doe <jane@x.org>" → "Jane Doe"; a bare address stays as is. */
@@ -1100,17 +1145,24 @@ function htmlToText_(s) {
 /** Event descriptions may be plain text or light HTML; returns readable text with line breaks. */
 function descriptionToText_(s) {
   if (!s) return '';
-  const text = decodeEntities_(String(s)
+  const text = htmlToLines_(s);
+  return text.length > MAX_DESCRIPTION_CHARS ? text.slice(0, MAX_DESCRIPTION_CHARS).trim() + '…' : text;
+}
+
+/** Light HTML to text, keeping paragraph and line breaks and showing link addresses. */
+function htmlToLines_(s) {
+  return decodeEntities_(String(s)
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
     .replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (all, href, label) => {
       const l = label.replace(/<[^>]+>/g, '').trim();
       return !l || l === href || href.indexOf(l) !== -1 ? href : l + ' (' + href + ')';
     })
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|tr|table)>/gi, '\n')
     .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/t[dh]>/gi, ' ')
     .replace(/<[^>]+>/g, ''))
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return text.length > MAX_DESCRIPTION_CHARS ? text.slice(0, MAX_DESCRIPTION_CHARS).trim() + '…' : text;
 }
