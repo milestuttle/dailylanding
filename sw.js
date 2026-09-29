@@ -1,7 +1,9 @@
 // Network first for the app's own files, falling back to the cache when offline.
 // Cross-origin requests (weather, Apps Script) are left alone.
-const CACHE = 'dailydash-v2';
-const SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon-192.png'];
+const CACHE = 'dailydash-v3';
+const SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon-192.png',
+  './fonts/plex-sans.woff2', './fonts/plex-mono-400.woff2', './fonts/plex-mono-600.woff2',
+  './fonts/plex-serif-400.woff2', './fonts/plex-serif-400-italic.woff2', './fonts/plex-serif-600.woff2'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
