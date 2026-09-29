@@ -57,7 +57,8 @@ python3 -m http.server 8000    # preview at http://localhost:8000
 - **Calendars:** Google calendars are read through the Calendar advanced service (`apiEvent_`), falling back to `CalendarApp`. iCal feeds go through a hand-written parser (`icalEventsInRange_`) that handles TZID, RRULE, EXDATE, RECURRENCE-ID, and declined invites. Change it only with tests.
 - **The devotional parser** (`parseDevotional_`) scrapes utmost.org and is fragile. If it breaks, have the owner run `debugDevotional()` in the Apps Script editor and send the log, then adjust the parser and its tests.
 - **Page sections appear only when their data exists:** Tasks and Inbox stay hidden if the backend doesn't return them, and a failing work account is reported in the status line without hiding anything else.
-- Keep the page dependency-free. Icons are an inline SVG sprite in `index.html` (`#i-*`). Colors are CSS variables with light and dark sets.
+- Keep the page dependency-free. Icons are an inline SVG sprite in `index.html` (`#i-*`). Colors are CSS variables with light and dark sets (the Sage palette).
+- **Fonts** are IBM Plex (Sans, Mono for schedule times, Serif for the devotional), self-hosted as Latin-subset woff2 files in `fonts/` with their OFL license. Only the weights declared in the `@font-face` rules at the top of `styles.css` exist; a new weight needs its file, a rule, and an entry in `SHELL` in `sw.js`. Corners come from `--radius-lg`, `--radius`, `--radius-sm`, and `--radius-ctl` (buttons, tabs, chips); only small icon buttons, dots, and checkboxes stay round.
 
 ## Working with the owner
 

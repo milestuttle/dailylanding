@@ -1,78 +1,89 @@
-/* DailyDash — one theme, light and dark. */
+/* DailyDash — Sage palette, IBM Plex type, light and dark. */
+
+/* IBM Plex (SIL Open Font License, see fonts/OFL.txt), Latin subset, self-hosted. */
+@font-face { font-family: "IBM Plex Sans"; src: url("fonts/plex-sans.woff2") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/plex-mono-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/plex-mono-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Serif"; src: url("fonts/plex-serif-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Serif"; src: url("fonts/plex-serif-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "IBM Plex Serif"; src: url("fonts/plex-serif-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
 
 :root {
-  --bg: #f5f4f0;
-  --surface: #ffffff;
-  --surface-2: #f0efea;
-  --text: #1c1c1e;
-  --muted: #6b6a66;
-  --border: #e4e2dc;
-  --accent: #3355cc;
+  --bg: #eef1ea;
+  --surface: #fbfcf9;
+  --surface-2: #e8ece3;
+  --text: #1e2a1f;
+  --muted: #5d6a5a;
+  --border: #d9e0d2;
+  --accent: #3c6b37;
   --accent-text: #ffffff;
-  --accent-soft: #e7ecfb;
-  --danger: #b3261e;
-  --danger-soft: #fbe9e7;
-  --warn: #8a5300;
-  --warn-soft: #fdf1dc;
-  --success: #2e7d4f;
-  --cal-0: #3355cc;
-  --cal-1: #2e8b57;
-  --cal-2: #c77700;
-  --cal-3: #8e44ad;
+  --accent-soft: #e0eadb;
+  --danger: #a8321f;
+  --danger-soft: #f8e6e1;
+  --warn: #8a5b00;
+  --warn-soft: #f6edd6;
+  --success: #2f7a45;
+  --cal-0: #3c6b37;
+  --cal-1: #a8741a;
+  --cal-2: #2f6f86;
+  --cal-3: #8a4f7d;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 8px rgba(0, 0, 0, 0.04);
 
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --radius: 14px;
-  --radius-sm: 9px;
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --serif: "IBM Plex Serif", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 12px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-ctl: 6px; /* buttons, tabs, chips, and the search bar */
   --nav-w: 84px;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141517;
-    --surface: #1d1e21;
-    --surface-2: #26272b;
-    --text: #ececec;
-    --muted: #9c9ca2;
-    --border: #2e2f34;
-    --accent: #8fa8ff;
-    --accent-text: #10152b;
-    --accent-soft: #252c45;
-    --danger: #ff8a80;
-    --danger-soft: #3b2322;
-    --warn: #f2b25c;
-    --warn-soft: #3a2f1d;
-    --success: #6fcf97;
-    --cal-0: #8fa8ff;
-    --cal-1: #6fcf97;
-    --cal-2: #f2b25c;
-    --cal-3: #c39bd3;
+    --bg: #131913;
+    --surface: #1b221b;
+    --surface-2: #232b23;
+    --text: #e6ebe3;
+    --muted: #9aa696;
+    --border: #2a332a;
+    --accent: #9ccc8f;
+    --accent-text: #122010;
+    --accent-soft: #253424;
+    --danger: #ff9a85;
+    --danger-soft: #3b2420;
+    --warn: #e6be66;
+    --warn-soft: #342d18;
+    --success: #8fd49f;
+    --cal-0: #9ccc8f;
+    --cal-1: #e6be66;
+    --cal-2: #80c2d8;
+    --cal-3: #d8a2cc;
     --shadow: none;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #141517;
-  --surface: #1d1e21;
-  --surface-2: #26272b;
-  --text: #ececec;
-  --muted: #9c9ca2;
-  --border: #2e2f34;
-  --accent: #8fa8ff;
-  --accent-text: #10152b;
-  --accent-soft: #252c45;
-  --danger: #ff8a80;
-  --danger-soft: #3b2322;
-  --warn: #f2b25c;
-  --warn-soft: #3a2f1d;
-  --success: #6fcf97;
-  --cal-0: #8fa8ff;
-  --cal-1: #6fcf97;
-  --cal-2: #f2b25c;
-  --cal-3: #c39bd3;
+  --bg: #131913;
+  --surface: #1b221b;
+  --surface-2: #232b23;
+  --text: #e6ebe3;
+  --muted: #9aa696;
+  --border: #2a332a;
+  --accent: #9ccc8f;
+  --accent-text: #122010;
+  --accent-soft: #253424;
+  --danger: #ff9a85;
+  --danger-soft: #3b2420;
+  --warn: #e6be66;
+  --warn-soft: #342d18;
+  --success: #8fd49f;
+  --cal-0: #9ccc8f;
+  --cal-1: #e6be66;
+  --cal-2: #80c2d8;
+  --cal-3: #d8a2cc;
   --shadow: none;
   color-scheme: dark;
 }
@@ -135,7 +146,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   min-height: 38px;
   padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--surface);
   font-weight: 600;
   font-size: 0.875rem;
@@ -208,7 +219,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   gap: 2px;
   padding: 6px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -222,7 +233,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   min-width: 56px;
   padding: 6px 8px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: none;
   color: var(--muted);
   font-size: 0.6875rem;
@@ -363,7 +374,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin-bottom: 20px;
   padding: 0 10px 0 16px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -560,7 +571,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: center;
   padding: 4px 10px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--surface-2);
   font-size: 0.875rem;
   font-weight: 500;
@@ -590,7 +601,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .event-open {
   display: grid;
-  grid-template-columns: 7.5rem 1fr;
+  grid-template-columns: 9.75rem 1fr; /* fits "10:30 AM – 11:30 AM" in Plex Mono */
   gap: 12px;
   flex: 1;
   min-width: 0;
@@ -604,7 +615,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .event-open:hover .event-title { color: var(--accent); }
 .join-btn { flex: none; }
 .event:first-child { border-top: 0; }
-.event-time { font-size: 0.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.event-time { font-family: var(--mono); font-size: 0.8125rem; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
 .event-time .muted { font-weight: 400; }
 .event-main { display: grid; min-width: 0; }
 .event-title { display: flex; align-items: baseline; font-weight: 600; overflow-wrap: anywhere; }
@@ -625,7 +636,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-self: center;
   margin-left: 8px;
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--accent);
   color: var(--accent-text);
   font-size: 0.6875rem;
@@ -687,7 +698,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tab-due {
   margin-left: 4px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 0.6875rem;
@@ -715,7 +726,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .due {
   flex: none;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--surface-2);
   color: var(--muted);
   font-size: 0.75rem;
@@ -731,7 +742,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin-top: 10px;
   padding: 4px 4px 4px 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--bg);
 }
 .task-add input { flex: 1; min-width: 0; padding: 6px 0; border: 0; background: none; }
@@ -741,7 +752,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Inbox */
 .count-badge {
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 0.75rem;
@@ -829,7 +840,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--accent);
 }
@@ -879,7 +890,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tab {
   padding: 5px 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: transparent;
   color: var(--muted);
   font-size: 0.8125rem;
@@ -943,7 +954,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   max-height: calc(100dvh - 48px);
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);

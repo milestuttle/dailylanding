@@ -4,7 +4,7 @@ A personal start page for laptop and phone: your schedule with meeting links, Go
 
 It has two parts:
 
-- **The page** (`index.html`, `app.js`, `styles.css`) is a static site on GitHub Pages. Weather comes directly from the [National Weather Service](https://www.weather.gov). Settings, bookmarks, and notes are saved in the browser.
+- **The page** (`index.html`, `app.js`, `styles.css`) is a static site hosted on Vercel. Weather comes directly from the [National Weather Service](https://www.weather.gov). Settings, bookmarks, and notes are saved in the browser.
 - **The backend** (`apps-script/`) is a Google Apps Script web app that runs under your Google account. It reads your calendars, tasks, and unread Gmail; fetches the devotional and news feeds; and adds events and tasks.
 
 The repo contains no calendar addresses or keys. Those are stored in the Apps Script project's properties and in your browser.
@@ -124,11 +124,13 @@ npm install
 npm test
 ```
 
-`tests/backend.test.js` checks the Apps Script code in Node: calendar feeds, news feeds, the devotional parser, and sync storage. `tests/e2e.test.js` loads the page in a headless browser with a fake backend and checks the schedule, devotional, weather, news, adding events, settings, and syncing. Both run on every pull request (`.github/workflows/test.yml`) and before each site deploy.
+`tests/backend.test.js` checks the Apps Script code in Node: calendar feeds, news feeds, the devotional parser, and sync storage. `tests/e2e.test.js` loads the page in a headless browser with a fake backend and checks the schedule, devotional, weather, news, adding events, settings, and syncing. Both run on every pull request and every push to `main` (`.github/workflows/test.yml`).
 
 ## Hosting
 
-Every push to `main` runs the tests and then deploys the page to GitHub Pages through `.github/workflows/deploy.yml`. Only the page's own files are published.
+The page is hosted on [Vercel](https://vercel.com), linked to this repository, so it works whether the repository is public or private. Every push to `main` deploys it, and every pull request gets its own preview address. `vercel.json` publishes only the page's own files, not the backend code, tests, or docs.
+
+Tests run on every pull request and every push to `main` (`.github/workflows/test.yml`). Vercel deploys independently of them, so merge only pull requests whose tests pass.
 
 **Install on your phone:** open the site, then use **Share → Add to Home Screen** on iPhone, or **⋮ → Install app** on Android.
 
