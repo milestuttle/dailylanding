@@ -425,6 +425,11 @@ async function run() {
     assert.strictEqual(added.start, '11:00');
     assert.strictEqual(added.days, 3);
 
+    // Glance: one link out, in a new tab.
+    assert(await page.isVisible('#glance .glance-link'));
+    assert.strictEqual(await page.getAttribute('#glance .glance-link', 'href'), 'https://glance.milestuttle.com/');
+    assert.strictEqual(await page.getAttribute('#glance .glance-link', 'target'), '_blank');
+
     // Bookmarks: site icons where there is one, else the glyph.
     await page.locator('#links').scrollIntoViewIfNeeded();
     await waitFor(async () => (await page.locator('.link-icon img').count()) === 1, 'placeholder icons dropped');
@@ -496,10 +501,12 @@ async function run() {
     await page.click('.nav-settings');
     await page.uncheck('#card-toggles input[value=inbox]');
     await page.uncheck('#card-toggles input[value=notes]');
+    await page.uncheck('#card-toggles input[value=glance]');
     await page.selectOption('#settings-form select[name=theme]', 'dark');
     await page.click('#settings-form button[type=submit]');
     assert(await page.isHidden('#inbox'));
     assert(await page.isHidden('#notes'));
+    assert(await page.isHidden('#glance'));
     assert(await page.isHidden('.nav a[href="#notes"]'));
     assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 2 tasks due (1 overdue)', 'hidden inbox leaves the summary');
     assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');

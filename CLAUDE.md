@@ -5,6 +5,7 @@ A personal start page, used on a laptop and a phone. It shows:
 - a schedule (today plus 2 days) with Join buttons and event details
 - Google Tasks from a personal and a work account
 - unread Gmail
+- a link card to the owner's Glance (Dynacat) dashboard
 - the *My Utmost for His Highest* devotional
 - NWS weather and alerts
 - news, bookmarks, and notes

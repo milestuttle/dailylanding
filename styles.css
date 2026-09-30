@@ -814,6 +814,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .guest-status.declined { color: var(--danger); }
 #details-calendar { display: flex; align-items: center; }
 
+/* Glance */
+.glance-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  margin: -4px -8px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  text-decoration: none;
+}
+.glance-link:hover { background: var(--surface-2); color: var(--text); }
+.glance-text { display: grid; margin-right: auto; }
+.glance-text strong { color: var(--text); font-weight: 600; }
+
 /* Bookmarks */
 .links {
   display: grid;
