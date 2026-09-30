@@ -18,6 +18,7 @@
     { id: 'devotional', name: 'Devotional' },
     { id: 'schedule', name: 'Schedule' },
     { id: 'tasks', name: 'Tasks' },
+    { id: 'glance', name: 'Glance' },
     { id: 'inbox', name: 'Inbox' },
     { id: 'links', name: 'Bookmarks' },
     { id: 'news', name: 'News' },
