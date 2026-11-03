@@ -343,6 +343,44 @@
   /* Search: Google, a web address, or a bookmark by name              */
   /* ---------------------------------------------------------------- */
 
+  /* ---------------------------------------------------------------- */
+  /* Phone apps: on an iPhone or iPad, Gmail's inbox opens in the app   */
+  /* ---------------------------------------------------------------- */
+
+  // Most apps (Claude, the Times) claim their web addresses, so a normal link opens them.
+  // Gmail claims none (Google's app-link list for mail.google.com leaves it out), so
+  // links to the Gmail inbox use the app's own googlegmail:// address instead. A link to
+  // one message stays on the web, since the app can't open a message from a link.
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const APP_LINKS = [
+    {
+      app: 'googlegmail://',
+      test: u => /^(mail\.google\.com|(www\.)?gmail\.com)$/.test(u.hostname)
+        && /^\/(mail(\/u\/\d+)?\/?)?$/.test(u.pathname) && (!u.hash || u.hash === '#inbox')
+    }
+  ];
+
+  /** The app address to use for a web link on this device, or null to stay on the web. */
+  function appUrl(href) {
+    if (!IOS) return null;
+    let u;
+    try { u = new URL(href, location.href); } catch (e) { return null; }
+    const match = APP_LINKS.find(a => a.test(u));
+    return match ? match.app : null;
+  }
+
+  // Tests replace window.__launchApp to see which app address was opened.
+  const launchApp = url => (window.__launchApp || (x => { location.href = x; }))(url);
+
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[href]');
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const app = appUrl(a.href);
+    if (!app) return;
+    e.preventDefault();
+    launchApp(app);
+  });
+
   const hostOf = url => { try { return new URL(url).hostname; } catch (e) { return ''; } };
   const looksLikeUrl = q => /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(q);
 
@@ -396,7 +434,9 @@
     const go = i => {
       const o = options[i];
       if (!o) return;
-      window.open(o.url, '_blank', 'noopener');
+      const app = appUrl(o.url);
+      if (app) launchApp(app);
+      else window.open(o.url, '_blank', 'noopener');
       input.value = '';
       update();
       input.blur();
