@@ -259,14 +259,14 @@ async function run() {
     // Schedule
     assert.match(await page.textContent('#next-up'), /^Now: Current meeting/);
     const labels = await page.locator('.agenda-day-label').allTextContents();
-    assert.deepStrictEqual(labels.map(l => l.replace(/\s+/g, ' ').trim()), ['Today Mon, Sep 28', 'Tomorrow Tue, Sep 29', 'Wednesday Sep 30']);
+    assert.deepStrictEqual(labels.map(l => l.replace(/\s+/g, ' ').trim()), ['Today Mon, Sep 28', 'Tomorrow Tue, Sep 29', 'Wednesday Sep 30 · Nothing scheduled'], 'an empty day is one line');
     const day = i => page.locator('.agenda-day').nth(i);
     assert.strictEqual(await day(0).locator('.event.past').count(), 1);
     assert.strictEqual(await day(0).locator('.event.now').count(), 1);
     assert.match(await day(0).textContent(), /Dinner with family/, 'evening event stays on today');
-    assert.strictEqual(await day(1).locator('.all-day li').count(), 1, 'two-day all-day event shows tomorrow too');
+    assert.strictEqual((await day(0).locator('.all-day li').textContent()).replace(/\s+/g, ' ').trim(), 'Fall break through Tue', 'a two-day all-day event shows once, with when it ends');
+    assert.strictEqual(await day(1).locator('.all-day li').count(), 0, 'and is not repeated tomorrow');
     assert.match(await day(1).textContent(), /Tomorrow planning/);
-    assert.match(await day(2).textContent(), /Nothing scheduled/);
     assert.strictEqual(await page.locator('script:not([src])').count(), 1, 'event titles are not inserted as HTML');
 
     // Header: what's on now, a Join button for it, the day in one line, and the tab title.
@@ -281,6 +281,10 @@ async function run() {
       assert(chip.x > text.x + text.width && Math.abs(chip.y - text.y) < 40, 'weather sits beside the greeting');
       assert(clock.y < chip.y && clock.x + clock.width <= chip.x + chip.width + 1, 'clock above the weather');
     }
+    // "Updated" and Refresh sit in the header, under the weather.
+    assert.strictEqual(await page.locator('.top #status').textContent(), 'Updated 10:15 AM');
+    assert(await page.isVisible('.top #refresh-btn'));
+    assert.strictEqual(await page.locator('footer').count(), 0);
     // Phone and rail navigation: Inbox has a link, the bookmark row doesn't need one.
     assert(await page.isVisible('.nav a[href="#inbox"]'));
     assert.strictEqual(await page.locator('.nav a[href="#links"]').count(), 0);
@@ -317,7 +321,7 @@ async function run() {
     assert.strictEqual(await details.locator('a[href^="https://calendar.google.com"]').count(), 1);
     await shot(page, 'event-details');
     await details.locator('[data-close]').click();
-    await day(1).locator('.chip-btn').click();
+    await day(0).locator('.chip-btn').click();
     assert.match(await page.textContent('#details-dialog .details-when'), /Mon, Sep 28 – Tue, Sep 29/, 'multi-day all-day event');
     await page.locator('#details-dialog [data-close]').click();
 
@@ -586,8 +590,10 @@ async function run() {
     assert.match(await page.textContent('#agenda-earlier summary'), /Earlier today\s*3 events/);
     assert(!(await page.locator('#agenda-earlier').evaluate(el => el.open)), 'today starts folded');
     const labels = await page.locator('.agenda-day-label').allTextContents();
-    assert.deepStrictEqual(labels.map(l => l.replace(/\s+/g, ' ').trim()), ['Tomorrow Tue, Sep 29', 'Wednesday Sep 30']);
+    assert.deepStrictEqual(labels.map(l => l.replace(/\s+/g, ' ').trim()), ['Tomorrow Tue, Sep 29', 'Wednesday Sep 30 · Nothing scheduled']);
     assert.strictEqual(await page.locator('.agenda-day >> nth=0').locator('.tl-block').count(), 1, 'tomorrow gets the timeline');
+    assert.strictEqual(await page.locator('#agenda-earlier .all-day li').count(), 0, 'an all-day event running into tomorrow moves to tomorrow');
+    assert.strictEqual((await page.locator('.agenda-day >> nth=0').locator('.all-day li').textContent()).trim(), 'Fall break', 'its last day needs no "through"');
     assert.strictEqual(await page.textContent('.tl-open'), 'Longest open stretch: 10 AM – 5 PM (7 hr)');
     assert.strictEqual(await page.textContent('#next-up'), 'Next: Tomorrow planning tomorrow at 9 AM');
     assert(await page.isHidden('#next-join'));
