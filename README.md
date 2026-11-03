@@ -114,6 +114,7 @@ Appearance (light or dark), folded and hidden cards, the web app URL, and the AP
 - **News categories:** edit `DEFAULT_NEWS` at the top of `Code.gs`, or set a `NEWS` script property with the same shape.
 - **Bookmarks:** they sit in one row under the search box. Click the pencil at the end of the row to rename, reorder, add, or remove them. On a phone, swipe the row sideways to see them all. Site icons come from Google's favicon service; a site without one gets a letter instead.
 - **Cards:** fold any card with the arrow in its corner, or hide cards (and the bookmark row) in **Settings → Cards on this device**. Both are remembered per device.
+- **Morning and evening:** before noon, News stays folded until you've read today's devotional. In the evening (from 6 PM, once today's events are over), Inbox folds, and so does Tasks unless something is overdue or due by tomorrow. A folded card says why. Open one with its arrow (or the link in the summary under your greeting) and it stays open for the rest of that morning or evening. The cutoffs are `MORNING_UNTIL` and `EVENING_HOUR` at the top of `app.js`.
 - **Weather location:** set it in Settings.
 - **Days shown in the schedule:** change `SCHEDULE_DAYS` at the top of `app.js` (1 to 7).
 

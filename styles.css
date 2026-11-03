@@ -504,6 +504,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card.collapsed .collapse-btn .icon { transform: rotate(-90deg); }
 .card.collapsed > :not(.card-head) { display: none !important; }
 .card.collapsed .card-head { margin-bottom: 0; }
+.auto-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .card.collapsed .card-head > .btn,
 .card.collapsed .card-head > .icon-btn:not(.collapse-btn),
 .card.collapsed .card-head > #notes-status { display: none; }
