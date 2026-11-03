@@ -814,54 +814,77 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .guest-status.declined { color: var(--danger); }
 #details-calendar { display: flex; align-items: center; }
 
-/* Glance */
-.glance-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  margin: -4px -8px;
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  text-decoration: none;
-}
-.glance-link:hover { background: var(--surface-2); color: var(--text); }
-.glance-text { display: grid; margin-right: auto; }
-.glance-text strong { color: var(--text); font-weight: 600; }
-
-/* Bookmarks */
+/* Bookmarks: one row of icons under the search box */
+.launcher { margin: -8px 0 20px; }
+.launcher-row { display: flex; align-items: center; gap: 4px; }
 .links {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 6px;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
 }
+.links::-webkit-scrollbar { display: none; }
+.links-empty { padding: 8px 4px; }
 
 .link {
+  flex: none;
   display: grid;
   justify-items: center;
-  gap: 6px;
-  padding: 10px 4px;
+  gap: 4px;
+  width: 76px;
+  padding: 6px 2px;
   border-radius: var(--radius-sm);
   color: var(--text);
   text-decoration: none;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   text-align: center;
 }
-.link:hover { background: var(--surface-2); }
+.link:hover { background: var(--surface); }
 
 .link-icon {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--accent);
 }
-.link-icon img { width: 24px; height: 24px; border-radius: 5px; }
+.link-icon img { width: 22px; height: 22px; border-radius: 5px; }
 .link-icon img + .link-glyph { display: none; }
 .monogram { font-weight: 700; font-size: 1rem; }
+.launcher-edit { flex: none; color: var(--muted); }
+
+/* When the row doesn't fit it scrolls sideways; the fade shows there's more. */
+.links.more {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+@media (max-width: 520px) { .link { width: 66px; } }
+
+/* While editing, the row becomes a panel */
+.launcher.editing {
+  margin-top: 0;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.launcher-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+.launcher-title .icon { color: var(--muted); }
 
 /* Editing bookmarks in the card */
 .link-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }

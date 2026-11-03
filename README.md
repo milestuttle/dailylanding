@@ -1,6 +1,6 @@
 # DailyDash
 
-A personal start page for laptop and phone: your schedule with meeting links, Google Tasks, unread Gmail, the *My Utmost for His Highest* devotional, weather with National Weather Service alerts, news headlines, a link to your Glance dashboard, bookmarks, and a notes pad.
+A personal start page for laptop and phone: your schedule with meeting links, Google Tasks, unread Gmail, the *My Utmost for His Highest* devotional, weather with National Weather Service alerts, news headlines, a row of bookmarks (including your Glance dashboard), and a notes pad.
 
 It has two parts:
 
@@ -112,9 +112,8 @@ Appearance (light or dark), folded and hidden cards, the web app URL, and the AP
 ## Changing things
 
 - **News categories:** edit `DEFAULT_NEWS` at the top of `Code.gs`, or set a `NEWS` script property with the same shape.
-- **Bookmarks:** click **Edit** on the Bookmarks card to rename, reorder, add, or remove them. Site icons come from Google's favicon service; a site without one gets a letter instead.
-- **Glance card:** its link is in `index.html` (search for `glance-link`).
-- **Cards:** fold any card with the arrow in its corner, or hide cards in **Settings → Cards on this device**. Both are remembered per device.
+- **Bookmarks:** they sit in one row under the search box. Click the pencil at the end of the row to rename, reorder, add, or remove them. On a phone, swipe the row sideways to see them all. Site icons come from Google's favicon service; a site without one gets a letter instead.
+- **Cards:** fold any card with the arrow in its corner, or hide cards (and the bookmark row) in **Settings → Cards on this device**. Both are remembered per device.
 - **Weather location:** set it in Settings.
 - **Days shown in the schedule:** change `SCHEDULE_DAYS` at the top of `app.js` (1 to 7).
 

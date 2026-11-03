@@ -18,9 +18,8 @@
     { id: 'devotional', name: 'Devotional' },
     { id: 'schedule', name: 'Schedule' },
     { id: 'tasks', name: 'Tasks' },
-    { id: 'glance', name: 'Glance' },
     { id: 'inbox', name: 'Inbox' },
-    { id: 'links', name: 'Bookmarks' },
+    { id: 'links', name: 'Bookmarks', fold: false }, // the row under the search box
     { id: 'news', name: 'News' },
     { id: 'notes', name: 'Notes' }
   ];
@@ -229,6 +228,7 @@
   function applyCards() {
     CARDS.forEach(c => {
       showCard(c.id);
+      if (c.fold === false) return;
       const folded = settings.collapsed.includes(c.id);
       const btn = $(c.id).querySelector('.collapse-btn');
       $(c.id).classList.toggle('collapsed', folded);
@@ -236,10 +236,11 @@
       btn.setAttribute('aria-label', `${folded ? 'Expand' : 'Collapse'} ${c.name}`);
       btn.title = folded ? 'Expand' : 'Collapse';
     });
+    fadeLinks(); // the bookmark row may have just been shown
   }
 
   function initCards() {
-    CARDS.forEach(c => {
+    CARDS.filter(c => c.fold !== false).forEach(c => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-btn collapse-btn';
@@ -1511,14 +1512,26 @@
   const faviconUrl = host => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
   let linkDraft = null; // bookmarks being edited in the card, or null
 
+  /** Fades the row's right edge while more bookmarks are scrolled out of view. */
+  function fadeLinks() {
+    const row = $('links-body');
+    row.classList.toggle('more', row.scrollWidth - row.scrollLeft - row.clientWidth > 2);
+  }
+
   function renderLinks() {
+    if (!settings.bookmarks.length) {
+      $('links-body').innerHTML = '<span class="muted small links-empty">No bookmarks yet. Use the pencil to add some.</span>';
+      fadeLinks();
+      return;
+    }
     $('links-body').innerHTML = settings.bookmarks.map(b => {
       const match = LINK_ICONS.find(([re]) => re.test(b.url.toLowerCase()));
       const glyph = match ? icon(match[1]) : `<span class="monogram">${esc((b.name || '?').trim().charAt(0).toUpperCase())}</span>`;
       const host = hostOf(b.url);
       const img = host ? `<img src="${esc(faviconUrl(host))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
-      return `<a class="link" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener"><span class="link-icon">${img}<span class="link-glyph">${glyph}</span></span><span class="link-name">${esc(b.name)}</span></a>`;
+      return `<a class="link" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener" title="${esc(b.name)}"><span class="link-icon">${img}<span class="link-glyph">${glyph}</span></span><span class="link-name">${esc(b.name)}</span></a>`;
     }).join('');
+    fadeLinks();
   }
 
   /** Trims a bookmark, adds https:// if needed, and names it after its site if unnamed. Null without an address. */
@@ -1533,11 +1546,12 @@
     const form = $('links-edit');
     const editing = !!linkDraft;
     form.hidden = !editing;
-    $('links-body').hidden = editing;
-    $('edit-links').hidden = editing;
-    if (!editing) { form.innerHTML = ''; return; }
+    $('links').classList.toggle('editing', editing);
+    $('links-body').closest('.launcher-row').hidden = editing;
+    if (!editing) { form.innerHTML = ''; fadeLinks(); return; }
     const last = linkDraft.length - 1;
     form.innerHTML = `
+      <h2 class="launcher-title">${icon('bookmark')}Edit bookmarks</h2>
       <ol class="link-rows">${linkDraft.map((b, i) => `
         <li class="link-row" data-i="${i}">
           <input class="link-row-name" value="${esc(b.name)}" placeholder="Name" aria-label="Bookmark ${i + 1} name" autocomplete="off">
@@ -1571,6 +1585,8 @@
     // No site icon (or only a tiny placeholder): fall back to the glyph.
     body.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
     body.addEventListener('load', e => { if (e.target.tagName === 'IMG' && e.target.naturalWidth < 32) e.target.remove(); }, true);
+    body.addEventListener('scroll', fadeLinks, { passive: true });
+    window.addEventListener('resize', fadeLinks);
 
     $('edit-links').addEventListener('click', () => {
       linkDraft = settings.bookmarks.map(b => Object.assign({}, b));
