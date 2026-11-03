@@ -146,8 +146,8 @@ async function run() {
   const browser = await chromium.launch();
 
   /** Opens the page with mocks. `backend` holds the fake server's sync store and records requests. */
-  async function open({ seed, backend = { sync: {}, gets: [], posts: [], tasks: newTasks() }, viewport = { width: 1360, height: 1000 }, colorScheme = 'light', mobile = false, now = NOW }) {
-    const ctx = await browser.newContext({ viewport, colorScheme, timezoneId: TZ, isMobile: mobile, hasTouch: mobile });
+  async function open({ seed, backend = { sync: {}, gets: [], posts: [], tasks: newTasks() }, viewport = { width: 1360, height: 1000 }, colorScheme = 'light', mobile = false, now = NOW, userAgent }) {
+    const ctx = await browser.newContext(Object.assign({ viewport, colorScheme, timezoneId: TZ, isMobile: mobile, hasTouch: mobile }, userAgent ? { userAgent } : {}));
     await ctx.clock.install({ time: now });
     await ctx.clock.resume();
     await ctx.route(/geocoding-api\.open-meteo\.com/, r => r.fulfill({ json: { results: [{ name: 'Cañon City', admin1: 'Colorado', country_code: 'US', latitude: 38.44, longitude: -105.24 }] } }));
@@ -479,6 +479,9 @@ async function run() {
     await page.keyboard.press('Enter');
     assert.strictEqual(await page.evaluate(() => window.opened), 'https://gemini.google.com');
     assert.strictEqual(await page.inputValue('#search-input'), '');
+    await page.fill('#search-input', 'gmail');
+    await page.press('#search-input', 'Enter');
+    assert.strictEqual(await page.evaluate(() => window.opened), 'https://mail.google.com', 'on a laptop Gmail opens on the web');
     await page.fill('#search-input', 'royal gorge hours');
     await page.press('#search-input', 'Enter');
     assert.strictEqual(await page.evaluate(() => window.opened), 'https://www.google.com/search?q=royal%20gorge%20hours');
@@ -641,6 +644,36 @@ async function run() {
     const { page, ctx, errors } = await open({ backend: { sync: {}, gets: [], posts: [], tasks }, seed: settings(), now: new Date('2026-09-28T19:30:00-06:00') });
     await waitFor(() => folded(page, 'tasks'), 'tasks folded for the evening');
     assert.strictEqual(await page.textContent('#tasks .auto-note'), 'Folded for the evening');
+    assert.deepStrictEqual(errors, []);
+    await ctx.close();
+  }
+
+  // iPhone: links to the Gmail inbox open the Gmail app; other links, and links to one message, stay on the web.
+  {
+    const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+    const { page, ctx, errors } = await open({ seed: settings(), viewport: { width: 390, height: 844 }, mobile: true, userAgent: IPHONE });
+    await page.evaluate(() => { window.__launchApp = url => { window.launched = (window.launched || []).concat(url); }; window.open = url => { window.opened = url; }; });
+    const popups = [];
+    ctx.on('page', p => popups.push(p.url()));
+    await page.click('.link[href="https://mail.google.com"]');
+    assert.deepStrictEqual(await page.evaluate(() => window.launched), ['googlegmail://'], 'the Gmail bookmark opens the app');
+    await page.fill('#search-input', 'gmail');
+    await page.press('#search-input', 'Enter');
+    assert.deepStrictEqual(await page.evaluate(() => window.launched), ['googlegmail://', 'googlegmail://'], 'so does picking it from search');
+    await waitFor(() => page.isVisible('#inbox-open'), 'inbox card');
+    await page.click('#inbox-open');
+    assert.strictEqual((await page.evaluate(() => window.launched)).length, 3, 'and the Inbox card’s Gmail button');
+    assert.strictEqual(await page.evaluate(() => window.opened), undefined);
+    // A single message isn't sent to the app: it opens in the page as before, and its link stays on the web.
+    assert.match(await page.getAttribute('.thread >> nth=0', 'href'), /^https:\/\/mail\.google\.com\/.*#inbox\//);
+    await page.click('.thread >> nth=0');
+    assert(await page.isVisible('#message-dialog'));
+    assert.strictEqual((await page.evaluate(() => window.launched)).length, 3);
+    await page.click('#message-dialog [data-close]');
+    // Other bookmarks are ordinary links.
+    await page.click('.link[href="https://www.youtube.com"]');
+    await waitFor(async () => popups.length === 1, 'youtube opened as a link');
+    assert.strictEqual((await page.evaluate(() => window.launched)).length, 3);
     assert.deepStrictEqual(errors, []);
     await ctx.close();
   }
