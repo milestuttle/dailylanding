@@ -274,6 +274,16 @@ async function run() {
     assert(await page.isVisible('#next-join'));
     assert.strictEqual(await page.getAttribute('#next-join', 'href'), 'https://meet.google.com/abc-defg-hij');
     assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 2 tasks due (1 overdue) · 7 unread');
+    assert.deepStrictEqual(await page.locator('#day-summary a').evaluateAll(as => as.map(a => a.getAttribute('href'))), ['#schedule', '#tasks', '#inbox'], 'summary parts link to their cards');
+    // Header: two columns on a laptop, the clock above the weather on the right.
+    {
+      const [text, chip, clock] = await Promise.all(['.top-text', '#weather-chip', '#clock'].map(s => page.locator(s).boundingBox()));
+      assert(chip.x > text.x + text.width && Math.abs(chip.y - text.y) < 40, 'weather sits beside the greeting');
+      assert(clock.y < chip.y && clock.x + clock.width <= chip.x + chip.width + 1, 'clock above the weather');
+    }
+    // Phone and rail navigation: Inbox has a link, the bookmark row doesn't need one.
+    assert(await page.isVisible('.nav a[href="#inbox"]'));
+    assert.strictEqual(await page.locator('.nav a[href="#links"]').count(), 0);
     assert.strictEqual(await page.title(), '(7) Now: Current meeting <script>alert(1)</script>');
 
     // Timeline for today: one block per timed event, a "now" line, and the longest open stretch.
@@ -361,6 +371,10 @@ async function run() {
     assert.match(alertTexts[0], /Winter Storm Warning until Tue 6 PM/);
     assert.match(alertTexts[1], /Wind Advisory until 6 PM/);
     assert.strictEqual(await page.locator('.alert-item.severe').count(), 1);
+    assert(await page.isHidden('.alert-item >> nth=1'), 'only the most severe alert shows at first');
+    assert.strictEqual((await page.textContent('#alerts-more')).trim(), '+1 more');
+    await page.click('#alerts-more');
+    assert.strictEqual((await page.textContent('#alerts-more')).trim(), 'Show less');
     await page.click('.alert-item >> nth=1');
     assert.strictEqual(await page.textContent('#alert-title'), 'Wind Advisory');
     assert.match(await page.textContent('#alert-body'), /Secure outdoor objects\./);
@@ -515,6 +529,7 @@ async function run() {
     assert(await page.isHidden('#notes'));
     assert(await page.isHidden('#links'));
     assert(await page.isHidden('.nav a[href="#notes"]'));
+    assert(await page.isHidden('#nav-inbox'), 'a hidden inbox hides its nav link');
     assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 2 tasks due (1 overdue)', 'hidden inbox leaves the summary');
     assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     await page.reload();
@@ -578,6 +593,8 @@ async function run() {
     assert(await page.isHidden('#next-join'));
     assert.strictEqual(await page.textContent('#day-summary'), 'Tomorrow: 1 event, first at 9 AM · 2 tasks due (1 overdue) · 7 unread');
     assert.strictEqual(await page.title(), '(7) DailyDash');
+    assert.deepStrictEqual((await page.locator('.alert-item').allTextContents()).map(t => t.trim()), ['Winter Storm Warning until Tue 6 PM'], 'an alert that ended at 6 PM is gone');
+    assert.strictEqual(await page.locator('#alerts-more').count(), 0);
     // Unfolding "Earlier today" survives the page's regular refresh.
     await page.click('#agenda-earlier summary');
     await page.clock.runFor(21 * 1000);
@@ -652,6 +669,7 @@ async function run() {
 
     assert(await page.isHidden('#tasks'), 'Tasks card hidden when the backend has no Tasks service');
     assert(await page.isHidden('#nav-tasks'));
+    assert(await page.isHidden('#nav-inbox'));
     assert(await page.isHidden('#inbox'));
     assert(await page.isHidden('#alerts'));
     assert.strictEqual(await page.textContent('#weather-temp'), '64°', 'falls back to Open-Meteo when the NWS is down');

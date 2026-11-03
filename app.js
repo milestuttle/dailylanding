@@ -206,6 +206,7 @@
       loadWeather();
     }
     renderSchedule(); // keeps "now" and past-event styling current
+    if (activeAlerts().length !== shownAlerts.length) renderAlerts(); // an alert ran out
   }
 
   /* ---------------------------------------------------------------- */
@@ -946,25 +947,26 @@
       join.setAttribute('aria-label', `Join ${joinable.e.title}`);
     }
 
+    // Each part links to its card: [text, card id].
     const parts = [];
     if (days.length && cardOn('schedule')) {
       if (isEvening(days, now)) {
         const t = days[1].timed;
-        parts.push(t.length ? `Tomorrow: ${plural(t.length, 'event')}, first at ${fmtTime(new Date(t[0].start))}` : 'Nothing scheduled tomorrow');
+        parts.push([t.length ? `Tomorrow: ${plural(t.length, 'event')}, first at ${fmtTime(new Date(t[0].start))}` : 'Nothing scheduled tomorrow', 'schedule']);
       } else {
         const later = days[0].timed.filter(e => new Date(e.start) > now).length;
-        if (later) parts.push(`${plural(later, 'more event')} today`);
-        else if (days[0].timed.length) parts.push('No more events today');
+        if (later) parts.push([`${plural(later, 'more event')} today`, 'schedule']);
+        else if (days[0].timed.length) parts.push(['No more events today', 'schedule']);
       }
     }
     if (cardOn('tasks')) {
       const due = dueTasks();
       const overdue = due.filter(t => t.due < localDate()).length;
-      if (due.length) parts.push(`${plural(due.length, 'task')} due${overdue ? ` (${overdue} overdue)` : ''}`);
+      if (due.length) parts.push([`${plural(due.length, 'task')} due${overdue ? ` (${overdue} overdue)` : ''}`, 'tasks']);
     }
     const unread = payload && payload.inbox && cardOn('inbox') ? payload.inbox.unread : 0;
-    if (unread) parts.push(`${unread} unread`);
-    summary.textContent = parts.join(' · ');
+    if (unread) parts.push([`${unread} unread`, 'inbox']);
+    summary.innerHTML = parts.map(([text, id]) => `<a class="summary-link" href="#${id}">${esc(text)}</a>`).join(' · ');
     summary.hidden = !parts.length;
 
     document.title = `${unread ? `(${unread}) ` : ''}${tabTitle || 'DailyDash'}`;
@@ -1440,19 +1442,36 @@
     return `until ${localDate(d) === localDate() ? '' : `${d.toLocaleDateString('en-US', { weekday: 'short' })} `}${fmtTime(d)}`;
   }
 
+  let alertsOpen = false; // the alerts after the first, unfolded
+  let shownAlerts = [];
+
+  /** Alerts that haven't ended yet. The list is fetched with the weather, so one can run out before the next fetch. */
+  const activeAlerts = () => alerts.filter(a => { const t = a.ends || a.expires; return !t || new Date(t) > Date.now(); });
+
+  /** One line for the most severe alert, with the rest behind "+N more". */
   function renderAlerts() {
     const box = $('alerts');
-    box.hidden = !alerts.length;
-    box.innerHTML = alerts.map((a, i) => {
+    shownAlerts = activeAlerts();
+    box.hidden = !shownAlerts.length;
+    const item = (a, i) => {
       const level = a.severity === 'Extreme' || a.severity === 'Severe' ? 'severe' : a.severity === 'Moderate' ? 'moderate' : 'minor';
-      return `<button type="button" class="alert-item ${level}" data-alert="${i}">${icon('alert')}<span><strong>${esc(a.event)}</strong> <span class="alert-until">${esc(alertUntil(a))}</span></span></button>`;
-    }).join('');
+      return `<button type="button" class="alert-item ${level}" data-alert="${i}"${i && !alertsOpen ? ' hidden' : ''}>${icon('alert')}<span><strong>${esc(a.event)}</strong> <span class="alert-until">${esc(alertUntil(a))}</span></span></button>`;
+    };
+    const more = shownAlerts.length - 1;
+    box.innerHTML = shownAlerts.length ? `
+      <div class="alert-row">${item(shownAlerts[0], 0)}${more ? `<button type="button" class="btn btn-small btn-quiet alert-more" id="alerts-more" aria-expanded="${alertsOpen}">${alertsOpen ? 'Show less' : `+${more} more`}</button>` : ''}</div>
+      ${shownAlerts.slice(1).map((a, i) => item(a, i + 1)).join('')}` : '';
   }
 
   document.addEventListener('click', e => {
+    if (e.target.closest('#alerts-more')) {
+      alertsOpen = !alertsOpen;
+      renderAlerts();
+      return;
+    }
     const btn = e.target.closest('[data-alert]');
     if (!btn) return;
-    const a = alerts[Number(btn.dataset.alert)];
+    const a = shownAlerts[Number(btn.dataset.alert)];
     if (!a) return;
     $('alert-title').textContent = a.event;
     $('alert-meta').textContent = [a.severity, alertUntil(a)].filter(Boolean).join(' · ');
