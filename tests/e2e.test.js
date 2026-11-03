@@ -227,6 +227,7 @@ async function run() {
     for (let i = 0; i < 40; i++) { if (await fn()) return; await new Promise(r => setTimeout(r, 100)); }
     assert.fail(`timed out waiting for ${what}`);
   };
+  const folded = (page, id) => page.locator(`#${id}`).evaluate(el => el.classList.contains('collapsed'));
 
   // Not connected yet, upgrading from the old version of the page.
   {
@@ -384,6 +385,11 @@ async function run() {
     assert.match(await page.textContent('#alert-body'), /Secure outdoor objects\./);
     await page.click('#alert-dialog [data-close]');
 
+    // Morning: News waits, folded, until today's devotional is read.
+    assert(await folded(page, 'news'), 'news is folded before the reading');
+    assert.strictEqual(await page.textContent('#news .auto-note'), 'Opens after today’s reading');
+    assert(!(await page.evaluate(() => JSON.parse(localStorage.getItem('dailydash:v2')).collapsed.includes('news'))), 'a time-of-day fold is not saved as a fold');
+
     // Devotional
     assert.strictEqual(await page.textContent('.devo-title'), 'The “Go” of Renunciation');
     assert.strictEqual(await page.getAttribute('#devo-body cite a', 'href'), 'https://www.esv.org/Luke+9:57/');
@@ -392,6 +398,8 @@ async function run() {
     await page.keyboard.press('Escape');
     // Closing the reading marks it read: the card shrinks to one line, and that syncs.
     await waitFor(() => page.isVisible('.devo-done'), 'devotional marked read');
+    assert(!(await folded(page, 'news')), 'news opens once the reading is done');
+    assert(await page.isHidden('#news .auto-note'));
     assert.match(await page.textContent('.devo-done'), /Read today\s*The “Go” of Renunciation/);
     await waitFor(async () => backend.sync.devoRead && backend.sync.devoRead.value === TODAY, 'devotional read synced');
     await page.click('#devo-show');
@@ -599,6 +607,21 @@ async function run() {
     assert(await page.isHidden('#next-join'));
     assert.strictEqual(await page.textContent('#day-summary'), 'Tomorrow: 1 event, first at 9 AM · 2 tasks due (1 overdue) · 7 unread');
     assert.strictEqual(await page.title(), '(7) DailyDash');
+    // Evening: Inbox folds; Tasks stays open because one is overdue.
+    assert(await folded(page, 'inbox'), 'inbox folds in the evening');
+    assert.strictEqual(await page.textContent('#inbox .auto-note'), 'Folded for the evening');
+    assert(await page.isVisible('#inbox-count'), 'the unread count still shows');
+    assert(!(await folded(page, 'tasks')), 'tasks stay open with something overdue');
+    assert(!(await folded(page, 'news')), 'news is not folded in the evening');
+    // Following "7 unread" opens it for the rest of the evening, even after a reload.
+    await page.click('#day-summary a[href="#inbox"]');
+    assert(!(await folded(page, 'inbox')));
+    await page.reload();
+    await waitFor(async () => (await page.locator('#inbox-list li').count()) > 0, 'inbox after reload');
+    assert(!(await folded(page, 'inbox')), 'opened by hand stays open this evening');
+    await page.click('#inbox .collapse-btn');
+    assert(await folded(page, 'inbox'));
+    assert(!(await page.evaluate(() => JSON.parse(localStorage.getItem('dailydash:v2')).collapsed.includes('inbox'))), 'folding it again is still just the evening fold');
     assert.deepStrictEqual((await page.locator('.alert-item').allTextContents()).map(t => t.trim()), ['Winter Storm Warning until Tue 6 PM'], 'an alert that ended at 6 PM is gone');
     assert.strictEqual(await page.locator('#alerts-more').count(), 0);
     // Unfolding "Earlier today" survives the page's regular refresh.
@@ -607,6 +630,16 @@ async function run() {
     assert(await page.locator('#agenda-earlier').evaluate(el => el.open));
     assert.strictEqual(await page.locator('#agenda-earlier .event').count(), 3);
     await shot(page, 'evening', { fullPage: true });
+    assert.deepStrictEqual(errors, []);
+    await ctx.close();
+  }
+
+  // Evening with nothing due by tomorrow: Tasks folds too.
+  {
+    const tasks = [{ id: 'L1', title: 'My Tasks', items: [{ id: 'x', title: 'Plan spring unit', notes: '', due: '2026-10-15', parent: '', position: '1' }] }];
+    const { page, ctx, errors } = await open({ backend: { sync: {}, gets: [], posts: [], tasks }, seed: settings(), now: new Date('2026-09-28T19:30:00-06:00') });
+    await waitFor(() => folded(page, 'tasks'), 'tasks folded for the evening');
+    assert.strictEqual(await page.textContent('#tasks .auto-note'), 'Folded for the evening');
     assert.deepStrictEqual(errors, []);
     await ctx.close();
   }

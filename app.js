@@ -13,6 +13,7 @@
   const REFRESH_MS = 15 * 60 * 1000;
   const SCHEDULE_DAYS = 3; // today plus the next two days
   const EVENING_HOUR = 18; // from 6 PM, once today's events are over, the schedule leads with tomorrow
+  const MORNING_UNTIL = 12; // before noon, News stays folded until the devotional is read
   const JOIN_EARLY_MINUTES = 10; // the header's Join button appears this long before a meeting
   const CARDS = [
     { id: 'devotional', name: 'Devotional' },
@@ -54,6 +55,7 @@
     // This device only: cards folded down to their title, and cards not shown at all.
     collapsed: [],
     hiddenCards: [],
+    modeOpened: { key: '', ids: [] }, // cards opened by hand during this morning's or evening's auto-folding
     place: null, // cached geocoding result: { query, name, lat, lon }
     // Sync bookkeeping: when each synced field was last edited, which ones
     // still need uploading, and whether this device has merged with the server yet.
@@ -137,6 +139,8 @@
     merged.syncDirty = Array.isArray(merged.syncDirty) ? merged.syncDirty.slice() : [];
     merged.collapsed = Array.isArray(merged.collapsed) ? merged.collapsed.slice() : [];
     merged.hiddenCards = Array.isArray(merged.hiddenCards) ? merged.hiddenCards.slice() : [];
+    const mo = merged.modeOpened;
+    merged.modeOpened = mo && typeof mo.key === 'string' && Array.isArray(mo.ids) ? { key: mo.key, ids: mo.ids.slice() } : { key: '', ids: [] };
     return merged;
   }
 
@@ -206,6 +210,7 @@
       loadWeather();
     }
     renderSchedule(); // keeps "now" and past-event styling current
+    applyDayMode(); // morning and evening folds start and end on their own
     if (activeAlerts().length !== shownAlerts.length) renderAlerts(); // an alert ran out
   }
 
@@ -226,33 +231,110 @@
     if (nav) nav.hidden = !visible;
   }
 
+  /* Morning and evening: some cards fold by themselves for part of the day.
+   *  - Morning (before noon): News waits until today's devotional is marked as read.
+   *  - Evening (the schedule's evening view): Inbox folds, and so does Tasks unless
+   *    something is due by tomorrow.
+   * These folds never touch settings.collapsed. Opening one keeps it open for the
+   * rest of that morning or evening (settings.modeOpened), and the next day starts fresh. */
+  function dayMode(now = Date.now()) {
+    const payload = todayPayload();
+    if (!payload) return null;
+    if (new Date(now).getHours() < MORNING_UNTIL && payload.devotional && cardOn('devotional') && settings.devoRead !== localDate()) {
+      return { name: 'morning', folds: { news: 'Opens after today’s reading' } };
+    }
+    if (isEvening(scheduleDays(payload), now)) {
+      const folds = { inbox: 'Folded for the evening' };
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const lists = taskLists() || [];
+      const dueSoon = lists.some(l => l.items.some(t => !t.done && t.due && t.due <= localDate(tomorrow)));
+      if (!dueSoon) folds.tasks = 'Folded for the evening';
+      return { name: 'evening', folds };
+    }
+    return null;
+  }
+
+  const modeKey = mode => (mode ? `${localDate()}:${mode.name}` : '');
+  let currentMode = null;
+  let currentModeSig = '';
+
+  /** Folds set by the time of day, minus any opened by hand this morning or evening. */
+  function autoFolds() {
+    if (!currentMode) return {};
+    const opened = settings.modeOpened && settings.modeOpened.key === modeKey(currentMode) ? settings.modeOpened.ids : [];
+    const folds = Object.assign({}, currentMode.folds);
+    opened.forEach(id => { delete folds[id]; });
+    return folds;
+  }
+
+  /** Re-checks the time of day and the data; refolds cards only when that changes something. */
+  function applyDayMode() {
+    currentMode = dayMode();
+    const sig = JSON.stringify([modeKey(currentMode), autoFolds()]);
+    if (sig === currentModeSig) return;
+    currentModeSig = sig;
+    applyCards();
+  }
+
+  const isFolded = id => settings.collapsed.includes(id) || id in autoFolds();
+
   function applyCards() {
+    const auto = autoFolds();
     CARDS.forEach(c => {
       showCard(c.id);
       if (c.fold === false) return;
-      const folded = settings.collapsed.includes(c.id);
-      const btn = $(c.id).querySelector('.collapse-btn');
-      $(c.id).classList.toggle('collapsed', folded);
+      const folded = isFolded(c.id);
+      const card = $(c.id);
+      const btn = card.querySelector('.collapse-btn');
+      card.classList.toggle('collapsed', folded);
       btn.setAttribute('aria-expanded', String(!folded));
       btn.setAttribute('aria-label', `${folded ? 'Expand' : 'Collapse'} ${c.name}`);
       btn.title = folded ? 'Expand' : 'Collapse';
+      const note = card.querySelector('.auto-note');
+      note.textContent = auto[c.id] || '';
+      note.hidden = !auto[c.id] || settings.collapsed.includes(c.id);
     });
     fadeLinks(); // the bookmark row may have just been shown
   }
 
+  /** Folds or opens a card by hand. Opening a card the time of day folded keeps it open until the mode ends. */
+  function toggleCard(id, open = isFolded(id)) {
+    const key = modeKey(currentMode);
+    const opened = settings.modeOpened && settings.modeOpened.key === key ? settings.modeOpened.ids : [];
+    const auto = currentMode ? currentMode.folds : {};
+    if (open) {
+      settings.collapsed = settings.collapsed.filter(x => x !== id);
+      if (id in auto && !opened.includes(id)) settings.modeOpened = { key, ids: opened.concat(id) };
+    } else if (id in auto && opened.includes(id)) {
+      settings.modeOpened = { key, ids: opened.filter(x => x !== id) };
+    } else if (!settings.collapsed.includes(id)) {
+      settings.collapsed = settings.collapsed.concat(id);
+    }
+    saveSettings();
+    currentModeSig = '';
+    applyDayMode();
+  }
+
   function initCards() {
     CARDS.filter(c => c.fold !== false).forEach(c => {
+      const head = $(c.id).querySelector('.card-head');
+      const note = document.createElement('span');
+      note.className = 'auto-note muted small';
+      note.hidden = true;
+      head.appendChild(note);
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-btn collapse-btn';
       btn.innerHTML = icon('chevron');
-      btn.addEventListener('click', () => {
-        const folded = settings.collapsed.includes(c.id);
-        settings.collapsed = folded ? settings.collapsed.filter(id => id !== c.id) : settings.collapsed.concat(c.id);
-        saveSettings();
-        applyCards();
-      });
-      $(c.id).querySelector('.card-head').appendChild(btn);
+      btn.addEventListener('click', () => toggleCard(c.id));
+      head.appendChild(btn);
+    });
+    // Following a link to a card the time of day folded (from the summary or the nav) opens it.
+    document.addEventListener('click', e => {
+      const a = e.target.closest('a.summary-link, a.nav-link');
+      const id = a && (a.getAttribute('href') || '').slice(1);
+      if (id && id in autoFolds()) toggleCard(id, true);
     });
     applyCards();
   }
@@ -733,6 +815,7 @@
     renderTasks(payload);
     renderInbox(payload);
     renderNews(payload);
+    applyDayMode();
     if (!connected()) {
       setStatus('Not connected to Google yet');
     } else if (payload) {
@@ -760,6 +843,7 @@
     devoExpanded = false;
     markChanged(['devoRead']);
     renderDevotional(todayPayload());
+    applyDayMode();
   }
 
   function initDevotional() {
