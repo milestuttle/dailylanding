@@ -323,10 +323,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: 0.8125rem;
   text-align: right;
 }
-.top-status:has(#status:empty):has(#refresh-btn[hidden]) { display: none; }
-.top-status .btn { margin-right: -8px; }
 .top-status .error { color: var(--danger); }
-@media (min-width: 1100px) { .top-status { flex-basis: auto; max-width: 24rem; margin-top: -2px; } }
+/* Settings sits at the end of this line, except on wide screens, where it's in the side rail. */
+.top-settings { width: 32px; height: 32px; margin-right: -6px; color: var(--muted); }
+@media (min-width: 1100px) {
+  .top-status { flex-basis: auto; max-width: 24rem; margin-top: -2px; }
+  .top-status:has(#status:empty):has(#refresh-btn[hidden]) { display: none; }
+}
 
 .weather-chip {
   display: flex;
@@ -378,7 +381,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .top { align-items: flex-start; }
   .top-side { width: 100%; }
   .clock { display: none; }
-  .weather-chip { flex: 1; flex-wrap: wrap; }
+  .weather-chip { flex: 1 1 100%; flex-wrap: wrap; }
   .wx-strip {
     flex-basis: 100%;
     justify-content: space-between;
