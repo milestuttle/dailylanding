@@ -425,13 +425,20 @@ async function run() {
     assert.strictEqual(added.start, '11:00');
     assert.strictEqual(added.days, 3);
 
-    // Glance: one link out, in a new tab.
-    assert(await page.isVisible('#glance .glance-link'));
-    assert.strictEqual(await page.getAttribute('#glance .glance-link', 'href'), 'https://glance.milestuttle.com/');
-    assert.strictEqual(await page.getAttribute('#glance .glance-link', 'target'), '_blank');
+    // Layout: bookmarks are one row under the search box (Glance among them), above two columns:
+    // devotional, schedule, and tasks on the left; inbox, news, and notes on the right.
+    const box = sel => page.locator(sel).boundingBox();
+    const [search, row, devo, inbox, news, notes, tasks] = await Promise.all(['#search', '#links-body', '#devotional', '#inbox', '#news', '#notes', '#tasks'].map(box));
+    assert(row.y > search.y && row.y < devo.y, 'bookmark row sits between the search box and the cards');
+    assert(row.height < 90, `bookmark row is a single row (${row.height}px)`);
+    assert.strictEqual(await page.locator('.link').count(), 10);
+    assert.strictEqual(await page.locator('#links .collapse-btn').count(), 0, 'the bookmark row has no fold arrow');
+    assert.strictEqual(await page.getAttribute('.link[href*="glance"]', 'target'), '_blank');
+    assert.strictEqual(await page.locator('#glance').count(), 0, 'no separate Glance card');
+    assert(Math.abs(inbox.y - devo.y) < 2 && inbox.x > devo.x, 'inbox heads the right column');
+    assert(news.y > inbox.y && notes.y > news.y && tasks.x === devo.x, 'card order in each column');
 
     // Bookmarks: site icons where there is one, else the glyph.
-    await page.locator('#links').scrollIntoViewIfNeeded();
     await waitFor(async () => (await page.locator('.link-icon img').count()) === 1, 'placeholder icons dropped');
     assert.match(await page.getAttribute('.link-icon img', 'src'), /domain=www\.esv\.org/);
 
@@ -501,12 +508,12 @@ async function run() {
     await page.click('.nav-settings');
     await page.uncheck('#card-toggles input[value=inbox]');
     await page.uncheck('#card-toggles input[value=notes]');
-    await page.uncheck('#card-toggles input[value=glance]');
+    await page.uncheck('#card-toggles input[value=links]');
     await page.selectOption('#settings-form select[name=theme]', 'dark');
     await page.click('#settings-form button[type=submit]');
     assert(await page.isHidden('#inbox'));
     assert(await page.isHidden('#notes'));
-    assert(await page.isHidden('#glance'));
+    assert(await page.isHidden('#links'));
     assert(await page.isHidden('.nav a[href="#notes"]'));
     assert.strictEqual(await page.textContent('#day-summary'), '1 more event today · 2 tasks due (1 overdue)', 'hidden inbox leaves the summary');
     assert.strictEqual(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
@@ -609,6 +616,7 @@ async function run() {
     assert.strictEqual(await page.inputValue('#notes-text'), 'From the laptop\n\nFrom the phone', 'first sync keeps both devices’ notes');
     assert.strictEqual(await page.textContent('#greeting'), 'Good morning, Miles', 'name comes from the server');
     assert.strictEqual(await page.locator('.link').count(), 1, 'untouched default bookmarks are replaced by synced ones');
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways page scroll on a phone');
     await waitFor(async () => backend.sync.notes.value === 'From the laptop\n\nFrom the phone', 'merged notes uploaded');
 
     // Typing uploads after a short pause.

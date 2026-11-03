@@ -5,10 +5,10 @@ A personal start page, used on a laptop and a phone. It shows:
 - a schedule (today plus 2 days) with Join buttons and event details
 - Google Tasks from a personal and a work account
 - unread Gmail
-- a link card to the owner's Glance (Dynacat) dashboard
 - the *My Utmost for His Highest* devotional
 - NWS weather and alerts
-- news, bookmarks, and notes
+- a row of bookmarks under the search box (Glance, the owner's Dynacat dashboard, is one of them)
+- news and notes
 
 README.md is the user-facing setup guide. This file is the working context for changing the code.
 
@@ -57,6 +57,7 @@ python3 -m http.server 8000    # preview at http://localhost:8000
 - **Background refresh:** the `warmCache` timer (turned on with `installTriggers()`) refreshes the calendar, devotional, and news every 10 minutes from 5 AM to 11 PM, for the last time zone and day count the page asked for (`LAST_VIEW`). Cache lifetimes are longer than the timer interval.
 - **Calendars:** Google calendars are read through the Calendar advanced service (`apiEvent_`), falling back to `CalendarApp`. iCal feeds go through a hand-written parser (`icalEventsInRange_`) that handles TZID, RRULE, EXDATE, RECURRENCE-ID, and declined invites. Change it only with tests.
 - **The devotional parser** (`parseDevotional_`) scrapes utmost.org and is fragile. If it breaks, have the owner run `debugDevotional()` in the Apps Script editor and send the log, then adjust the parser and its tests.
+- **Layout:** the left column is the day (Devotional, Schedule, Tasks); the right is Inbox, News, and Notes. On a phone the columns stack in that order. Bookmarks are not a card: they're the `#links` row under the search box, listed in `CARDS` with `fold: false` so they can be hidden but not folded.
 - **Page sections appear only when their data exists:** Tasks and Inbox stay hidden if the backend doesn't return them, and a failing work account is reported in the status line without hiding anything else.
 - Keep the page dependency-free. Icons are an inline SVG sprite in `index.html` (`#i-*`). Colors are CSS variables with light and dark sets (the Sage palette).
 - **Fonts** are IBM Plex (Sans, Mono for schedule times, Serif for the devotional), self-hosted as Latin-subset woff2 files in `fonts/` with their OFL license. Only the weights declared in the `@font-face` rules at the top of `styles.css` exist; a new weight needs its file, a rule, and an entry in `SHELL` in `sw.js`. Corners come from `--radius-lg`, `--radius`, `--radius-sm`, and `--radius-ctl` (buttons, tabs, chips); only small icon buttons, dots, and checkboxes stay round.
