@@ -99,6 +99,10 @@
         </button>
         <div class="clock" id="clock"></div>
         <button class="icon-btn top-settings" type="button" data-open-settings aria-label="Settings"><svg class="icon"><use href="#i-settings"/></svg></button>
+        <p class="top-status" role="status">
+          <span id="status"></span>
+          <button class="btn btn-small btn-quiet" type="button" id="refresh-btn" hidden><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
+        </p>
       </div>
     </header>
 
@@ -187,10 +191,6 @@
       </div>
     </main>
 
-    <footer class="foot">
-      <span id="status"></span>
-      <button class="btn btn-small btn-quiet" type="button" id="refresh-btn" hidden><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
-    </footer>
   </div>
 
   <dialog class="dialog dialog-wide" id="devo-dialog" aria-labelledby="devo-dialog-title">

@@ -303,12 +303,30 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .summary-link { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--border); text-underline-offset: 3px; }
 .summary-link:hover { color: var(--accent); text-decoration: underline; text-decoration-color: currentColor; }
 
-.top-side { display: flex; align-items: center; gap: 12px; }
+.top-side { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .top-side .clock { margin-left: auto; }
 @media (min-width: 1100px) {
-  .top-side { flex-direction: column; align-items: flex-end; gap: 8px; }
+  .top-side { flex-direction: column; flex-wrap: nowrap; align-items: flex-end; gap: 8px; }
   .top-side .clock { order: -1; margin-left: 0; line-height: 1.2; }
 }
+
+/* "Updated 10:15 AM · Refresh", and any problems, under the weather */
+.top-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 6px;
+  flex-basis: 100%;
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: right;
+}
+.top-status:has(#status:empty):has(#refresh-btn[hidden]) { display: none; }
+.top-status .btn { margin-right: -8px; }
+.top-status .error { color: var(--danger); }
+@media (min-width: 1100px) { .top-status { flex-basis: auto; max-width: 24rem; margin-top: -2px; } }
 
 .weather-chip {
   display: flex;
@@ -598,6 +616,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-weight: 700;
 }
 .agenda-day-label .muted { font-weight: 500; font-size: 0.8125rem; }
+.agenda-day.empty .agenda-day-label { margin-bottom: 0; }
+.chip-note { margin-left: 6px; color: var(--muted); font-size: 0.8125rem; }
 
 .events { margin: 0; padding: 0; list-style: none; }
 
@@ -981,19 +1001,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .checklist input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
 .checklist li.done span { color: var(--muted); text-decoration: line-through; }
 
-/* Footer */
-.foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 4px 10px;
-  margin-top: 24px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  text-align: center;
-}
-.foot .error { color: var(--danger); }
 
 /* ------------------------------------------------------------------ */
 /* Dialogs                                                             */

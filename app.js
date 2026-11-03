@@ -1051,8 +1051,23 @@
     const evening = isEvening(days, now);
     const dot = e => `<span class="cal-dot" data-cal="${Number(e.calIndex) % 4}" title="${esc(e.calendar)}"></span>`;
 
-    const dayEvents = d => `
-        ${d.allDay.length ? `<ul class="all-day">${d.allDay.map(e => `<li><button type="button" class="chip-btn" data-event="${events.indexOf(e)}">${dot(e)}${esc(e.title)}</button></li>`).join('')}</ul>` : ''}
+    // An all-day event spanning several days is listed once, on the first day shown in full,
+    // with the day it runs through. (In the evening, "Earlier today" keeps only those ending today.)
+    const firstDay = new Map();
+    (evening ? days.slice(1) : days).forEach(d => d.allDay.forEach(e => { if (!firstDay.has(e)) firstDay.set(e, d.i); }));
+    const allDayHere = d => d.allDay.filter(e => !firstDay.has(e) || firstDay.get(e) === d.i);
+    const through = (e, d) => {
+      const last = new Date(new Date(e.end).getTime() - 1);
+      if (localDate(last) === localDate(d.date)) return '';
+      const nearby = last - d.date < 6 * 86400000;
+      return `<span class="chip-note"> through ${esc(last.toLocaleDateString('en-US', nearby ? { weekday: 'short' } : { month: 'short', day: 'numeric' }))}</span>`;
+    };
+
+    const dayEvents = d => {
+      const allDay = allDayHere(d);
+      if (!allDay.length && !d.timed.length) return '';
+      return `
+        ${allDay.length ? `<ul class="all-day">${allDay.map(e => `<li><button type="button" class="chip-btn" data-event="${events.indexOf(e)}">${dot(e)}${esc(e.title)}${through(e, d)}</button></li>`).join('')}</ul>` : ''}
         ${d.timed.length ? `<ol class="events">${d.timed.map(e => {
           const s = new Date(e.start);
           const end = new Date(e.end);
@@ -1068,21 +1083,27 @@
             </button>
             ${e.joinUrl && state !== 'past' ? `<a class="btn btn-small join-btn ${soon ? 'btn-primary' : ''}" href="${esc(safeUrl(e.joinUrl))}" target="_blank" rel="noopener">${icon('video')}Join</a>` : ''}
           </li>`;
-        }).join('')}</ol>` : ''}
-        ${!d.allDay.length && !d.timed.length ? '<p class="muted small">Nothing scheduled</p>' : ''}`;
+        }).join('')}</ol>` : ''}`;
+    };
+
+    // A day with nothing of its own is one line. "Else" when an earlier day's all-day event still covers it.
+    const emptyNote = d => (d.allDay.length ? 'Nothing else scheduled' : 'Nothing scheduled');
 
     // The first day shown in full gets the timeline: today, or tomorrow in the evening.
-    const renderDay = (d, first) => `
-      <div class="agenda-day">
-        <h3 class="agenda-day-label">${dayName(d)} <span class="muted">${d.date.toLocaleDateString('en-US', d.i < 2 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' })}</span></h3>
+    const renderDay = (d, first) => {
+      const body = dayEvents(d);
+      return `
+      <div class="agenda-day${body ? '' : ' empty'}">
+        <h3 class="agenda-day-label">${dayName(d)} <span class="muted">${d.date.toLocaleDateString('en-US', d.i < 2 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' })}</span>${body ? '' : ` <span class="muted agenda-empty">· ${emptyNote(d)}</span>`}</h3>
         ${first ? timeline(d, events, now) : ''}
-        ${dayEvents(d)}
+        ${body}
       </div>`;
+    };
 
     const earlier = d => `
       <details class="agenda-earlier" id="agenda-earlier"${earlierOpen ? ' open' : ''}>
         <summary>Earlier today <span class="muted">${d.timed.length ? plural(d.timed.length, 'event') : 'Nothing scheduled'}</span></summary>
-        ${dayEvents(d)}
+        ${dayEvents(d) || '<p class="muted small">Nothing scheduled</p>'}
       </details>`;
 
     body.innerHTML = `
