@@ -286,6 +286,7 @@ async function run() {
     assert.strictEqual(await page.locator('.top #status').textContent(), 'Updated 10:15 AM');
     assert(await page.isVisible('.top #refresh-btn'));
     assert.strictEqual(await page.locator('footer').count(), 0);
+    assert(await page.isHidden('.top-settings'), 'wide screens use the side rail for Settings');
     // Phone and rail navigation: Inbox has a link, the bookmark row doesn't need one.
     assert(await page.isVisible('.nav a[href="#inbox"]'));
     assert.strictEqual(await page.locator('.nav a[href="#links"]').count(), 0);
@@ -673,6 +674,15 @@ async function run() {
     assert.strictEqual(await page.textContent('#greeting'), 'Good morning, Miles', 'name comes from the server');
     assert.strictEqual(await page.locator('.link').count(), 1, 'untouched default bookmarks are replaced by synced ones');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways page scroll on a phone');
+    // Phone header: the weather gets the full width; Settings is on the line under it.
+    {
+      const [chip, side, gear, status] = await Promise.all(['#weather-chip', '.top-side', '.top-settings', '.top-status'].map(sel => page.locator(sel).boundingBox()));
+      assert(Math.abs(chip.width - side.width) < 1, `weather is full width (${chip.width} of ${side.width})`);
+      assert(gear.y >= status.y && gear.y + gear.height <= status.y + status.height + 1 && gear.y > chip.y + chip.height, 'settings button sits on the status line');
+      await page.click('.top-settings');
+      assert(await page.isVisible('#settings-dialog'));
+      await page.click('#settings-dialog [data-close]');
+    }
     await waitFor(async () => backend.sync.notes.value === 'From the laptop\n\nFrom the phone', 'merged notes uploaded');
 
     // Typing uploads after a short pause.
